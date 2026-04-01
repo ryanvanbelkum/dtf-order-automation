@@ -1,6 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import threading
 import queue
 import time
@@ -16,22 +16,22 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 # ── paths ──────────────────────────────────────────────────────────────────
-BASE_DIR    = os.path.dirname(os.path.abspath(sys.argv[0]))
-CONFIG_FILE = os.path.join(BASE_DIR, "dtf_config.json")
-LOG_FILE    = os.path.join(BASE_DIR, "dtf_log.json")
+BASE_DIR     = os.path.dirname(os.path.abspath(sys.argv[0]))
+CONFIG_FILE  = os.path.join(BASE_DIR, "dtf_config.json")
+LOG_FILE     = os.path.join(BASE_DIR, "dtf_log.json")
+MAPPING_FILE = os.path.join(BASE_DIR, "dtf_mapping.json")
 
 DEFAULT_CONFIG = {
     "shopify_api_key":   "",
     "shopify_store_url": "",
     "designs_folder":    "",
     "hot_folder":        "",
-    "mapping_file":      "",
     "interval_hours":    1,
     "schedule_enabled":  True,
     "last_run":          None,
 }
 
-# ── config / log helpers ───────────────────────────────────────────────────
+# ── config / log / mapping helpers ────────────────────────────────────────
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE) as f:
@@ -55,6 +55,16 @@ def save_log(log):
     with open(LOG_FILE, "w") as f:
         json.dump(log[-50:], f, indent=2)
 
+def load_mapping():
+    if os.path.exists(MAPPING_FILE):
+        with open(MAPPING_FILE) as f:
+            return json.load(f)
+    return {}
+
+def save_mapping(mapping):
+    with open(MAPPING_FILE, "w") as f:
+        json.dump(mapping, f, indent=2)
+
 # ── tray icon ──────────────────────────────────────────────────────────────
 def make_tray_image():
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
@@ -75,19 +85,21 @@ class DTFApp:
         self.root        = None
         self._stop_event = threading.Event()
         self._log_queue  = queue.Queue()
+        self._mappings   = load_mapping()
+        self._mapping_rows = {}
         self._build_ui()
         self._start_scheduler()
-        self._drain_log()  # start fast log drain loop
+        self._drain_log()
 
     # ── UI construction ────────────────────────────────────────────────────
     def _build_ui(self):
         self.root = ctk.CTk()
         self.root.title("DTF Order Automation")
-        self.root.geometry("680x740")
+        self.root.geometry("720x780")
         self.root.resizable(False, False)
         self.root.protocol("WM_DELETE_WINDOW", self._hide_window)
 
-        # ── header ──
+        # header
         header = ctk.CTkFrame(self.root, fg_color="transparent")
         header.pack(fill="x", padx=24, pady=(20, 4))
 
@@ -106,14 +118,15 @@ class DTFApp:
         )
         self.status_lbl.pack(side="right")
 
-        # ── tabs ──
+        # tabs
         self.tabview = ctk.CTkTabview(self.root, corner_radius=12)
         self.tabview.pack(fill="both", expand=True, padx=16, pady=(4, 16))
 
-        for name in ("Dashboard", "Last Run", "History", "Settings"):
+        for name in ("Dashboard", "Mapping", "Last Run", "History", "Settings"):
             self.tabview.add(name)
 
         self._tab_dashboard()
+        self._tab_mapping()
         self._tab_last_run()
         self._tab_history()
         self._tab_settings()
@@ -139,7 +152,6 @@ class DTFApp:
         )
         scroll.pack(fill="both", expand=True)
 
-        # next run
         c = self._card(scroll, "Next Scheduled Run")
         self.next_run_var  = tk.StringVar(value="—")
         self.countdown_var = tk.StringVar(value="")
@@ -149,7 +161,6 @@ class DTFApp:
                      font=ctk.CTkFont(size=12),
                      text_color="gray55").pack(anchor="w", pady=(2, 0))
 
-        # last run summary
         c2 = self._card(scroll, "Last Run")
         self.last_run_var         = tk.StringVar(value="Never")
         self.last_run_summary_var = tk.StringVar(value="")
@@ -159,33 +170,25 @@ class DTFApp:
                      font=ctk.CTkFont(size=11),
                      text_color="gray55").pack(anchor="w", pady=(2, 0))
 
-        # schedule controls
         c3 = self._card(scroll, "Schedule")
-
         interval_row = ctk.CTkFrame(c3, fg_color="transparent")
         interval_row.pack(fill="x")
-
         ctk.CTkLabel(interval_row, text="Run automatically every",
                      font=ctk.CTkFont(size=12)).pack(side="left")
-
         self.interval_var = tk.IntVar(value=self.config["interval_hours"])
-
         spin = ctk.CTkFrame(interval_row, fg_color="transparent")
         spin.pack(side="left", padx=10)
         ctk.CTkButton(spin, text="−", width=30, height=30, corner_radius=6,
                       command=lambda: self._adjust_interval(-1)).pack(side="left")
         ctk.CTkLabel(spin, textvariable=self.interval_var,
-                     font=ctk.CTkFont(size=13, weight="bold"),
-                     width=34).pack(side="left")
+                     font=ctk.CTkFont(size=13, weight="bold"), width=34).pack(side="left")
         ctk.CTkButton(spin, text="+", width=30, height=30, corner_radius=6,
                       command=lambda: self._adjust_interval(1)).pack(side="left")
-
         ctk.CTkLabel(interval_row, text="hour(s)",
                      font=ctk.CTkFont(size=12)).pack(side="left")
 
         switch_row = ctk.CTkFrame(c3, fg_color="transparent")
         switch_row.pack(fill="x", pady=(12, 0))
-
         self.sched_switch = ctk.CTkSwitch(
             switch_row, text="Schedule enabled",
             font=ctk.CTkFont(size=12),
@@ -197,7 +200,6 @@ class DTFApp:
             self.sched_switch.deselect()
         self.sched_switch.pack(side="left")
 
-        # run / stop button
         c4 = self._card(scroll)
         self.run_btn = ctk.CTkButton(
             c4, text="▶  Run Now",
@@ -206,6 +208,145 @@ class DTFApp:
             command=self._run_btn_clicked,
         )
         self.run_btn.pack(fill="x")
+
+    # ── Mapping tab ────────────────────────────────────────────────────────
+    def _tab_mapping(self):
+        tab = self.tabview.tab("Mapping")
+
+        # top bar
+        top = ctk.CTkFrame(tab, fg_color="transparent")
+        top.pack(fill="x", padx=8, pady=(8, 0))
+
+        self.sync_btn = ctk.CTkButton(
+            top, text="↻  Sync Products from Shopify", width=230,
+            command=self._sync_products,
+        )
+        self.sync_btn.pack(side="left")
+
+        self.sync_status_var = tk.StringVar(value="")
+        ctk.CTkLabel(top, textvariable=self.sync_status_var,
+                     font=ctk.CTkFont(size=11),
+                     text_color="gray55").pack(side="left", padx=12)
+
+        ctk.CTkButton(top, text="Save Mappings", width=130,
+                      command=self._save_mappings).pack(side="right")
+
+        # divider
+        ctk.CTkFrame(tab, height=1, fg_color=("gray75", "gray30")).pack(
+            fill="x", padx=8, pady=8
+        )
+
+        # column headers
+        hdr = ctk.CTkFrame(tab, fg_color="transparent")
+        hdr.pack(fill="x", padx=16)
+        ctk.CTkLabel(hdr, text="PRODUCT",
+                     font=ctk.CTkFont(size=9, weight="bold"),
+                     text_color="gray50", anchor="w").pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(hdr, text="DESIGN FILE",
+                     font=ctk.CTkFont(size=9, weight="bold"),
+                     text_color="gray50", width=200, anchor="w").pack(side="left")
+        ctk.CTkFrame(hdr, width=90, fg_color="transparent").pack(side="left")  # spacer for Browse btn
+
+        # scrollable list
+        self.mapping_scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        self.mapping_scroll.pack(fill="both", expand=True, padx=8, pady=4)
+
+        self.mapping_placeholder = ctk.CTkLabel(
+            self.mapping_scroll,
+            text='Click "Sync Products from Shopify" to load your product list.',
+            font=ctk.CTkFont(size=12),
+            text_color="gray50",
+        )
+        self.mapping_placeholder.pack(pady=48)
+
+    def _sync_products(self):
+        if not self.config.get("shopify_store_url") or not self.config.get("shopify_api_key"):
+            messagebox.showwarning(
+                "Missing settings",
+                "Enter your Shopify Store URL and API Key in the Settings tab first."
+            )
+            return
+        self.sync_btn.configure(state="disabled", text="⏳  Syncing…")
+        self.sync_status_var.set("")
+        threading.Thread(target=self._do_sync_products, daemon=True).start()
+
+    def _do_sync_products(self):
+        products = fetch_shopify_products(self.config)
+        self.root.after(0, self._on_products_synced, products)
+
+    def _on_products_synced(self, products):
+        self.sync_btn.configure(state="normal", text="↻  Sync Products from Shopify")
+
+        if products is None:
+            self.sync_status_var.set("✗ Could not connect to Shopify")
+            return
+        if not products:
+            self.sync_status_var.set("No products found")
+            return
+
+        self.sync_status_var.set(f"{len(products)} product(s) loaded")
+
+        # rebuild list
+        for w in self.mapping_scroll.winfo_children():
+            w.destroy()
+        self._mapping_rows = {}
+
+        for product in products:
+            self._add_mapping_row(product["title"])
+
+    def _add_mapping_row(self, product_name):
+        current_file = self._mappings.get(product_name, "")
+        is_mapped    = bool(current_file)
+
+        row = ctk.CTkFrame(self.mapping_scroll,
+                           fg_color=("gray90", "gray17"), corner_radius=8)
+        row.pack(fill="x", pady=2)
+
+        inner = ctk.CTkFrame(row, fg_color="transparent")
+        inner.pack(fill="x", padx=12, pady=8)
+
+        ctk.CTkLabel(inner, text=product_name,
+                     font=ctk.CTkFont(size=12),
+                     anchor="w").pack(side="left", expand=True, fill="x")
+
+        file_var = tk.StringVar(value=current_file if is_mapped else "Not mapped")
+        file_lbl = ctk.CTkLabel(
+            inner, textvariable=file_var,
+            font=ctk.CTkFont(size=11),
+            text_color=("gray40", "gray60") if not is_mapped else ("gray10", "gray90"),
+            width=200, anchor="w",
+        )
+        file_lbl.pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            inner, text="Browse…", width=85, height=28, corner_radius=6,
+            command=self._make_browse_cmd(product_name, file_var, file_lbl),
+        ).pack(side="right")
+
+        self._mapping_rows[product_name] = {"file_var": file_var, "file_lbl": file_lbl}
+
+    def _make_browse_cmd(self, product_name, file_var, file_lbl):
+        def cmd():
+            start_dir = self.config.get("designs_folder") or os.path.expanduser("~")
+            path = filedialog.askopenfilename(
+                title=f"Select design for: {product_name}",
+                initialdir=start_dir,
+                filetypes=[
+                    ("Image files", "*.png *.jpg *.jpeg *.PNG *.JPG *.JPEG"),
+                    ("All files", "*.*"),
+                ],
+            )
+            if path:
+                filename = os.path.basename(path)
+                self._mappings[product_name] = filename
+                file_var.set(filename)
+                file_lbl.configure(text_color=("gray10", "gray90"))
+        return cmd
+
+    def _save_mappings(self):
+        save_mapping(self._mappings)
+        mapped = sum(1 for v in self._mappings.values() if v)
+        messagebox.showinfo("Saved", f"Mappings saved — {mapped} product(s) mapped.")
 
     # ── Last Run tab ───────────────────────────────────────────────────────
     def _tab_last_run(self):
@@ -226,19 +367,13 @@ class DTFApp:
         style = ttk.Style()
         style.theme_use("clam")
         style.configure("Dark.Treeview",
-                        background="#2b2b2b",
-                        foreground="#ffffff",
-                        fieldbackground="#2b2b2b",
-                        rowheight=30,
-                        font=("Segoe UI", 10),
-                        borderwidth=0)
+                        background="#2b2b2b", foreground="#ffffff",
+                        fieldbackground="#2b2b2b", rowheight=30,
+                        font=("Segoe UI", 10), borderwidth=0)
         style.configure("Dark.Treeview.Heading",
-                        background="#3a3a3a",
-                        foreground="#aaaaaa",
-                        font=("Segoe UI", 9, "bold"),
-                        relief="flat")
-        style.map("Dark.Treeview",
-                  background=[("selected", "#1f6aa5")])
+                        background="#3a3a3a", foreground="#aaaaaa",
+                        font=("Segoe UI", 9, "bold"), relief="flat")
+        style.map("Dark.Treeview", background=[("selected", "#1f6aa5")])
 
         cols = ("date", "orders", "skipped", "status")
         self.hist_tree = ttk.Treeview(tab, columns=cols, show="headings",
@@ -269,7 +404,6 @@ class DTFApp:
             ("Shopify Store URL", "shopify_store_url", "e.g. mystore.myshopify.com"),
             ("Shopify API Key",   "shopify_api_key",   "Admin API access token"),
             ("Designs Folder",    "designs_folder",    "Folder containing design PNG/JPG files"),
-            ("Mapping File",      "mapping_file",      "Path to order_mapping.xlsx"),
             ("Hot Folder",        "hot_folder",        "CADlink hot folder path"),
         ]
 
@@ -281,8 +415,7 @@ class DTFApp:
             ctk.CTkEntry(c, textvariable=var,
                          font=ctk.CTkFont(size=12),
                          height=36, corner_radius=8).pack(fill="x")
-            ctk.CTkLabel(c, text=hint,
-                         font=ctk.CTkFont(size=10),
+            ctk.CTkLabel(c, text=hint, font=ctk.CTkFont(size=10),
                          text_color="gray50").pack(anchor="w", pady=(4, 0))
 
         c_btn = self._card(scroll)
@@ -291,7 +424,7 @@ class DTFApp:
                       height=44, corner_radius=10,
                       command=self._save_settings).pack(fill="x")
 
-    # ── Tray setup ─────────────────────────────────────────────────────────
+    # ── Tray ───────────────────────────────────────────────────────────────
     def _setup_tray(self):
         menu = pystray.Menu(
             pystray.MenuItem("Open",    lambda: self.root.after(0, self._show_window), default=True),
@@ -302,17 +435,11 @@ class DTFApp:
         self.tray = pystray.Icon("DTF", make_tray_image(), "DTF Automation", menu)
         threading.Thread(target=self.tray.run, daemon=True).start()
 
-    def _hide_window(self):
-        self.root.withdraw()
-
+    def _hide_window(self):  self.root.withdraw()
     def _show_window(self):
-        self.root.deiconify()
-        self.root.lift()
-        self.root.focus_force()
-
+        self.root.deiconify(); self.root.lift(); self.root.focus_force()
     def _quit(self):
-        if self.tray:
-            self.tray.stop()
+        if self.tray: self.tray.stop()
         self.root.destroy()
 
     # ── Scheduler ─────────────────────────────────────────────────────────
@@ -334,7 +461,7 @@ class DTFApp:
                 self._run_now()
         self.root.after(1000, self._tick)
 
-    # ── Live log drain (200ms) ─────────────────────────────────────────────
+    # ── Live log drain ─────────────────────────────────────────────────────
     def _drain_log(self):
         try:
             while True:
@@ -347,7 +474,7 @@ class DTFApp:
             pass
         self.root.after(200, self._drain_log)
 
-    # ── Run / Stop logic ───────────────────────────────────────────────────
+    # ── Run / Stop ─────────────────────────────────────────────────────────
     def _run_btn_clicked(self):
         if self.running:
             self._stop_run()
@@ -360,13 +487,11 @@ class DTFApp:
         self._stop_event.clear()
         self.running = True
 
-        # Switch to Last Run tab and clear it for live output
         self.tabview.set("Last Run")
         self.last_run_detail.configure(state="normal")
         self.last_run_detail.delete("1.0", "end")
         self.last_run_detail.configure(state="disabled")
 
-        # Button becomes red Stop
         self.run_btn.configure(
             text="■  Stop",
             fg_color=("#c0392b", "#C0392B"),
@@ -393,14 +518,11 @@ class DTFApp:
         self.root.after(0, self._on_run_complete, result)
 
     def _on_run_complete(self, result):
-        # Reset button
         self.run_btn.configure(
-            state="normal",
-            text="▶  Run Now",
+            state="normal", text="▶  Run Now",
             fg_color=["#3a7ebf", "#1f6aa5"],
             hover_color=["#325882", "#144870"],
         )
-
         if result["status"] == "success":
             status_text, status_color = "● Success", "#30D158"
         elif result["status"] == "stopped":
@@ -414,7 +536,7 @@ class DTFApp:
         self._refresh_history()
         self.root.after(5000, lambda: self._set_status("● Idle", "gray60"))
 
-    # ── UI helpers ─────────────────────────────────────────────────────────
+    # ── UI refresh helpers ─────────────────────────────────────────────────
     def _set_status(self, text, color):
         self.status_var.set(text)
         self.status_lbl.configure(text_color=color)
@@ -449,7 +571,6 @@ class DTFApp:
             self.countdown_var.set("Schedule is disabled")
 
     def _refresh_last_run_tab(self):
-        """Show structured summary of the last completed run."""
         self.last_run_detail.configure(state="normal")
         self.last_run_detail.delete("1.0", "end")
         if not self.log:
@@ -469,17 +590,14 @@ class DTFApp:
             for o in r.get("order_details", []):
                 icon = "✓" if o["status"] == "ok" else "⚠"
                 lines.append(f"  {icon}  {o['order_id']}  ·  {o['product']}  ({o['size']})  →  {o.get('file', '—')}")
-
             if r.get("skipped_details"):
                 lines += ["", "── Skipped ─────────────────────────────────────"]
                 for s in r["skipped_details"]:
                     lines.append(f"  ⚠  {s['order_id']}  ·  {s['reason']}")
-
             if r.get("hot_folder_files"):
                 lines += ["", "── Files dropped into hot folder ───────────────"]
                 for f in r["hot_folder_files"]:
                     lines.append(f"  →  {f}")
-
             self.last_run_detail.insert("end", "\n".join(lines))
         self.last_run_detail.configure(state="disabled")
 
@@ -526,18 +644,8 @@ class DTFApp:
 
 # ── Automation engine ──────────────────────────────────────────────────────
 def run_automation(config, log_cb=None, stop_event=None):
-    """
-    Core logic: pull orders → look up mapping → calculate sizing →
-    write .jhdr → copy design file to hot folder.
-
-    Returns a result dict for logging.
-    """
-    import openpyxl
-    from PIL import Image as PILImage
-
     def log(msg):
-        if log_cb:
-            log_cb(msg)
+        if log_cb: log_cb(msg)
 
     def stopped():
         return stop_event is not None and stop_event.is_set()
@@ -556,24 +664,15 @@ def run_automation(config, log_cb=None, stop_event=None):
 
     CHILD_SIZES = {"YXS", "YS", "YM", "YL"}
 
-    # ── load mapping spreadsheet ──
-    log("Loading mapping spreadsheet…")
-    mapping = {}
-    try:
-        wb = openpyxl.load_workbook(config["mapping_file"], read_only=True)
-        ws = wb.active
-        for row in ws.iter_rows(min_row=3, values_only=True):
-            if row[0] and row[1]:
-                mapping[str(row[0]).strip()] = str(row[1]).strip()
-        wb.close()
-    except Exception as e:
-        result["status"] = "error"
-        result["skipped_details"].append({"order_id": "—", "reason": f"Could not load mapping file: {e}"})
-        log(f"  ✗ Failed to load mapping file: {e}")
-        return result
-    log(f"  ✓ Loaded {len(mapping)} product(s) from mapping")
+    # ── load mapping ──
+    log("Loading product mappings…")
+    mapping = load_mapping()
+    if not mapping:
+        log("  ⚠ No mappings configured — go to the Mapping tab to set up your products")
+    else:
+        log(f"  ✓ {len(mapping)} product(s) mapped")
 
-    # ── fetch orders from Shopify ──
+    # ── fetch orders ──
     log("\nFetching orders from Shopify…")
     orders = fetch_shopify_orders(config)
     if orders is None:
@@ -606,36 +705,22 @@ def run_automation(config, log_cb=None, stop_event=None):
             product_name = item.get("name", "").strip()
             size         = _extract_size(item)
 
-            # look up design file
             design_file = mapping.get(product_name)
             if not design_file:
-                log(f"  ⚠ {product_name} ({size}) — not found in mapping, skipped")
+                log(f"  ⚠ {product_name} ({size}) — not in mapping, skipped")
                 result["skipped"] += 1
-                result["skipped_details"].append({
-                    "order_id": order_id,
-                    "reason":   f"'{product_name}' not found in mapping spreadsheet",
-                })
-                result["order_details"].append({
-                    "order_id": order_id, "product": product_name,
-                    "size": size, "status": "skipped", "file": None,
-                })
+                result["skipped_details"].append({"order_id": order_id, "reason": f"'{product_name}' not in mapping"})
+                result["order_details"].append({"order_id": order_id, "product": product_name, "size": size, "status": "skipped", "file": None})
                 continue
 
             design_path = os.path.join(config["designs_folder"], design_file)
             if not os.path.exists(design_path):
                 log(f"  ⚠ {product_name} ({size}) — design file not found: {design_file}")
                 result["skipped"] += 1
-                result["skipped_details"].append({
-                    "order_id": order_id,
-                    "reason":   f"Design file not found: {design_file}",
-                })
-                result["order_details"].append({
-                    "order_id": order_id, "product": product_name,
-                    "size": size, "status": "skipped", "file": design_file,
-                })
+                result["skipped_details"].append({"order_id": order_id, "reason": f"Design file not found: {design_file}"})
+                result["order_details"].append({"order_id": order_id, "product": product_name, "size": size, "status": "skipped", "file": design_file})
                 continue
 
-            # calculate dimensions
             try:
                 width_in, height_in = _calculate_size(design_path, size, CHILD_SIZES)
             except Exception as e:
@@ -644,28 +729,22 @@ def run_automation(config, log_cb=None, stop_event=None):
                 result["skipped_details"].append({"order_id": order_id, "reason": str(e)})
                 continue
 
-            # write .jhdr then copy design to hot folder
             try:
                 base_name = f"{order_id}_{product_name}_{size}".replace(" ", "_").replace("/", "-")
                 jhdr_name = base_name + ".jhdr"
                 img_name  = base_name + os.path.splitext(design_file)[1]
-
                 jhdr_path = os.path.join(config["hot_folder"], jhdr_name)
                 img_dst   = os.path.join(config["hot_folder"], img_name)
 
                 _write_jhdr(jhdr_path, width_in, height_in)
-                time.sleep(0.1)  # jhdr must arrive before image
+                time.sleep(0.1)
                 shutil.copy2(design_path, img_dst)
 
                 log(f"  ✓ {product_name} ({size})  →  {img_name}  [{width_in}\" × {height_in}\"]")
-
                 result["files_queued"]     += 1
                 result["orders_processed"] += 1
                 result["hot_folder_files"].extend([jhdr_name, img_name])
-                result["order_details"].append({
-                    "order_id": order_id, "product": product_name,
-                    "size": size, "status": "ok", "file": img_name,
-                })
+                result["order_details"].append({"order_id": order_id, "product": product_name, "size": size, "status": "ok", "file": img_name})
             except Exception as e:
                 log(f"  ✗ {product_name} ({size}) — hot folder error: {e}")
                 result["skipped"] += 1
@@ -699,17 +778,14 @@ def _calculate_size(design_path, size, child_sizes):
     from PIL import Image as PILImage
     with PILImage.open(design_path) as img:
         w_px, h_px = img.size
-
     is_child     = size.upper() in child_sizes
     is_landscape = w_px > h_px
-
     if is_landscape:
         width_in  = 11.0 if is_child else 12.0
         height_in = round(width_in * (h_px / w_px), 3)
     else:
         width_in  = 10.0 if is_child else 11.0
-        height_in = width_in  # square
-
+        height_in = width_in
     return width_in, height_in
 
 
@@ -726,27 +802,44 @@ def _write_jhdr(path, width_in, height_in):
 
 
 def fetch_shopify_orders(config):
-    """Fetch unfulfilled orders from Shopify via Admin API."""
     import urllib.request
-    import urllib.error
-
     store = config.get("shopify_store_url", "").strip().rstrip("/")
     key   = config.get("shopify_api_key", "").strip()
+    if not store or not key:
+        return []
+    url = f"https://{store}/admin/api/2024-01/orders.json?status=open&fulfillment_status=unfulfilled&limit=250"
+    req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": key, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read()).get("orders", [])
+    except Exception:
+        return None
 
+
+def fetch_shopify_products(config):
+    import urllib.request
+    store = config.get("shopify_store_url", "").strip().rstrip("/")
+    key   = config.get("shopify_api_key", "").strip()
     if not store or not key:
         return []
 
-    url = f"https://{store}/admin/api/2024-01/orders.json?status=open&fulfillment_status=unfulfilled&limit=250"
-    req = urllib.request.Request(url, headers={
-        "X-Shopify-Access-Token": key,
-        "Content-Type": "application/json",
-    })
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read())
-            return data.get("orders", [])
-    except Exception:
-        return None
+    products = []
+    url = f"https://{store}/admin/api/2024-01/products.json?limit=250&fields=id,title"
+    while url:
+        req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": key, "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                products.extend(json.loads(resp.read()).get("products", []))
+                link = resp.headers.get("Link", "")
+                url  = None
+                if 'rel="next"' in link:
+                    for part in link.split(","):
+                        if 'rel="next"' in part:
+                            url = part.split(";")[0].strip().strip("<>")
+                            break
+        except Exception:
+            return None
+    return products
 
 
 # ── entry point ────────────────────────────────────────────────────────────
