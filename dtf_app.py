@@ -2,6 +2,7 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+import queue
 import time
 import json
 import os
@@ -72,8 +73,11 @@ class DTFApp:
         self.next_run_dt = None
         self.tray        = None
         self.root        = None
+        self._stop_event = threading.Event()
+        self._log_queue  = queue.Queue()
         self._build_ui()
         self._start_scheduler()
+        self._drain_log()  # start fast log drain loop
 
     # ── UI construction ────────────────────────────────────────────────────
     def _build_ui(self):
@@ -118,7 +122,6 @@ class DTFApp:
         self._refresh_dashboard()
 
     def _card(self, parent, title=None):
-        """Rounded card frame."""
         outer = ctk.CTkFrame(parent, corner_radius=12)
         outer.pack(fill="x", pady=5)
         inner = ctk.CTkFrame(outer, fg_color="transparent")
@@ -138,8 +141,8 @@ class DTFApp:
 
         # next run
         c = self._card(scroll, "Next Scheduled Run")
-        self.next_run_var   = tk.StringVar(value="—")
-        self.countdown_var  = tk.StringVar(value="")
+        self.next_run_var  = tk.StringVar(value="—")
+        self.countdown_var = tk.StringVar(value="")
         ctk.CTkLabel(c, textvariable=self.next_run_var,
                      font=ctk.CTkFont(size=28, weight="bold")).pack(anchor="w")
         ctk.CTkLabel(c, textvariable=self.countdown_var,
@@ -194,13 +197,13 @@ class DTFApp:
             self.sched_switch.deselect()
         self.sched_switch.pack(side="left")
 
-        # run now
+        # run / stop button
         c4 = self._card(scroll)
         self.run_btn = ctk.CTkButton(
             c4, text="▶  Run Now",
             font=ctk.CTkFont(size=14, weight="bold"),
             height=50, corner_radius=10,
-            command=self._run_now,
+            command=self._run_btn_clicked,
         )
         self.run_btn.pack(fill="x")
 
@@ -331,17 +334,56 @@ class DTFApp:
                 self._run_now()
         self.root.after(1000, self._tick)
 
-    # ── Run logic ─────────────────────────────────────────────────────────
+    # ── Live log drain (200ms) ─────────────────────────────────────────────
+    def _drain_log(self):
+        try:
+            while True:
+                msg = self._log_queue.get_nowait()
+                self.last_run_detail.configure(state="normal")
+                self.last_run_detail.insert("end", msg + "\n")
+                self.last_run_detail.see("end")
+                self.last_run_detail.configure(state="disabled")
+        except queue.Empty:
+            pass
+        self.root.after(200, self._drain_log)
+
+    # ── Run / Stop logic ───────────────────────────────────────────────────
+    def _run_btn_clicked(self):
+        if self.running:
+            self._stop_run()
+        else:
+            self._run_now()
+
     def _run_now(self):
         if self.running:
             return
+        self._stop_event.clear()
         self.running = True
-        self.run_btn.configure(state="disabled", text="⏳  Running…")
+
+        # Switch to Last Run tab and clear it for live output
+        self.tabview.set("Last Run")
+        self.last_run_detail.configure(state="normal")
+        self.last_run_detail.delete("1.0", "end")
+        self.last_run_detail.configure(state="disabled")
+
+        # Button becomes red Stop
+        self.run_btn.configure(
+            text="■  Stop",
+            fg_color=("#c0392b", "#C0392B"),
+            hover_color=("#922b21", "#922B21"),
+        )
         self._set_status("● Running", "#FFD60A")
         threading.Thread(target=self._do_run, daemon=True).start()
 
+    def _stop_run(self):
+        self._stop_event.set()
+        self.run_btn.configure(state="disabled", text="⏳  Stopping…")
+
     def _do_run(self):
-        result = run_automation(self.config)
+        def log_cb(msg):
+            self._log_queue.put(msg)
+
+        result = run_automation(self.config, log_cb=log_cb, stop_event=self._stop_event)
         self.log.append(result)
         save_log(self.log)
         self.config["last_run"] = result["timestamp"]
@@ -351,13 +393,21 @@ class DTFApp:
         self.root.after(0, self._on_run_complete, result)
 
     def _on_run_complete(self, result):
-        self.run_btn.configure(state="normal", text="▶  Run Now")
+        # Reset button
+        self.run_btn.configure(
+            state="normal",
+            text="▶  Run Now",
+            fg_color=["#3a7ebf", "#1f6aa5"],
+            hover_color=["#325882", "#144870"],
+        )
+
         if result["status"] == "success":
-            status_text  = "● Success"
-            status_color = "#30D158"
+            status_text, status_color = "● Success", "#30D158"
+        elif result["status"] == "stopped":
+            status_text, status_color = "● Stopped", "#FF453A"
         else:
-            status_text  = "● Completed with issues"
-            status_color = "#FFD60A"
+            status_text, status_color = "● Completed with issues", "#FFD60A"
+
         self._set_status(status_text, status_color)
         self._refresh_dashboard()
         self._refresh_last_run_tab()
@@ -399,6 +449,7 @@ class DTFApp:
             self.countdown_var.set("Schedule is disabled")
 
     def _refresh_last_run_tab(self):
+        """Show structured summary of the last completed run."""
         self.last_run_detail.configure(state="normal")
         self.last_run_detail.delete("1.0", "end")
         if not self.log:
@@ -474,7 +525,7 @@ class DTFApp:
 
 
 # ── Automation engine ──────────────────────────────────────────────────────
-def run_automation(config):
+def run_automation(config, log_cb=None, stop_event=None):
     """
     Core logic: pull orders → look up mapping → calculate sizing →
     write .jhdr → copy design file to hot folder.
@@ -483,6 +534,13 @@ def run_automation(config):
     """
     import openpyxl
     from PIL import Image as PILImage
+
+    def log(msg):
+        if log_cb:
+            log_cb(msg)
+
+    def stopped():
+        return stop_event is not None and stop_event.is_set()
 
     timestamp = datetime.now().isoformat()
     result = {
@@ -499,6 +557,7 @@ def run_automation(config):
     CHILD_SIZES = {"YXS", "YS", "YM", "YL"}
 
     # ── load mapping spreadsheet ──
+    log("Loading mapping spreadsheet…")
     mapping = {}
     try:
         wb = openpyxl.load_workbook(config["mapping_file"], read_only=True)
@@ -510,26 +569,47 @@ def run_automation(config):
     except Exception as e:
         result["status"] = "error"
         result["skipped_details"].append({"order_id": "—", "reason": f"Could not load mapping file: {e}"})
+        log(f"  ✗ Failed to load mapping file: {e}")
         return result
+    log(f"  ✓ Loaded {len(mapping)} product(s) from mapping")
 
     # ── fetch orders from Shopify ──
+    log("\nFetching orders from Shopify…")
     orders = fetch_shopify_orders(config)
     if orders is None:
         result["status"] = "error"
         result["skipped_details"].append({"order_id": "—", "reason": "Could not connect to Shopify"})
+        log("  ✗ Could not connect to Shopify — check URL and API key in Settings")
+        return result
+    log(f"  ✓ Found {len(orders)} unfulfilled order(s)")
+
+    if not orders:
+        log("\nNothing to do.")
         return result
 
+    log("")
+
     for order in orders:
+        if stopped():
+            log("\n⚠ Stopped by user.")
+            result["status"] = "stopped"
+            break
+
         order_id   = order.get("name", order.get("id", "?"))
         line_items = order.get("line_items", [])
+        log(f"Order {order_id}  ({len(line_items)} line item(s))")
 
         for item in line_items:
+            if stopped():
+                break
+
             product_name = item.get("name", "").strip()
             size         = _extract_size(item)
 
             # look up design file
             design_file = mapping.get(product_name)
             if not design_file:
+                log(f"  ⚠ {product_name} ({size}) — not found in mapping, skipped")
                 result["skipped"] += 1
                 result["skipped_details"].append({
                     "order_id": order_id,
@@ -543,6 +623,7 @@ def run_automation(config):
 
             design_path = os.path.join(config["designs_folder"], design_file)
             if not os.path.exists(design_path):
+                log(f"  ⚠ {product_name} ({size}) — design file not found: {design_file}")
                 result["skipped"] += 1
                 result["skipped_details"].append({
                     "order_id": order_id,
@@ -558,6 +639,7 @@ def run_automation(config):
             try:
                 width_in, height_in = _calculate_size(design_path, size, CHILD_SIZES)
             except Exception as e:
+                log(f"  ⚠ {product_name} ({size}) — sizing error: {e}")
                 result["skipped"] += 1
                 result["skipped_details"].append({"order_id": order_id, "reason": str(e)})
                 continue
@@ -575,6 +657,8 @@ def run_automation(config):
                 time.sleep(0.1)  # jhdr must arrive before image
                 shutil.copy2(design_path, img_dst)
 
+                log(f"  ✓ {product_name} ({size})  →  {img_name}  [{width_in}\" × {height_in}\"]")
+
                 result["files_queued"]     += 1
                 result["orders_processed"] += 1
                 result["hot_folder_files"].extend([jhdr_name, img_name])
@@ -583,14 +667,22 @@ def run_automation(config):
                     "size": size, "status": "ok", "file": img_name,
                 })
             except Exception as e:
+                log(f"  ✗ {product_name} ({size}) — hot folder error: {e}")
                 result["skipped"] += 1
                 result["skipped_details"].append({"order_id": order_id, "reason": str(e)})
 
-    if result["skipped"] > 0 and result["orders_processed"] == 0:
-        result["status"] = "error"
-    elif result["skipped"] > 0:
-        result["status"] = "partial"
+    if result["status"] != "stopped":
+        if result["skipped"] > 0 and result["orders_processed"] == 0:
+            result["status"] = "error"
+        elif result["skipped"] > 0:
+            result["status"] = "partial"
 
+    log(
+        f"\n{'─' * 48}\n"
+        f"Done: {result['orders_processed']} processed · "
+        f"{result['files_queued']} queued · "
+        f"{result['skipped']} skipped"
+    )
     return result
 
 
