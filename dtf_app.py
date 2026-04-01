@@ -508,14 +508,29 @@ class DTFApp:
         def log_cb(msg):
             self._log_queue.put(msg)
 
-        result = run_automation(self.config, log_cb=log_cb, stop_event=self._stop_event)
-        self.log.append(result)
-        save_log(self.log)
-        self.config["last_run"] = result["timestamp"]
-        save_config(self.config)
-        self.running = False
-        self._schedule_next()
-        self.root.after(0, self._on_run_complete, result)
+        result = None
+        try:
+            result = run_automation(self.config, log_cb=log_cb, stop_event=self._stop_event)
+            self.log.append(result)
+            save_log(self.log)
+            self.config["last_run"] = result["timestamp"]
+            save_config(self.config)
+        except Exception as e:
+            log_cb(f"\n✗ Unexpected error: {e}")
+            result = {
+                "timestamp":        datetime.now().isoformat(),
+                "status":           "error",
+                "orders_processed": 0,
+                "files_queued":     0,
+                "skipped":          0,
+                "order_details":    [],
+                "skipped_details":  [{"order_id": "—", "reason": f"Unexpected error: {e}"}],
+                "hot_folder_files": [],
+            }
+        finally:
+            self.running = False
+            self._schedule_next()
+            self.root.after(0, self._on_run_complete, result)
 
     def _on_run_complete(self, result):
         self.run_btn.configure(
