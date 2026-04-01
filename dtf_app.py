@@ -687,6 +687,11 @@ def run_automation(config, log_cb=None, stop_event=None):
     else:
         log(f"  ✓ {len(mapping)} product(s) mapped")
 
+    if stopped():
+        result["status"] = "stopped"
+        log("\n⚠ Stopped by user.")
+        return result
+
     # ── fetch orders ──
     log("\nFetching orders from Shopify…")
     orders = fetch_shopify_orders(config)
@@ -825,7 +830,7 @@ def fetch_shopify_orders(config):
     url = f"https://{store}/admin/api/2024-01/orders.json?status=open&fulfillment_status=unfulfilled&limit=250"
     req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": key, "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             return json.loads(resp.read()).get("orders", [])
     except Exception:
         return None
@@ -843,7 +848,7 @@ def fetch_shopify_products(config):
     while url:
         req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": key, "Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, timeout=8) as resp:
                 products.extend(json.loads(resp.read()).get("products", []))
                 link = resp.headers.get("Link", "")
                 url  = None
