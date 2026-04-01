@@ -1,5 +1,6 @@
+import customtkinter as ctk
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox
 import threading
 import time
 import json
@@ -10,35 +11,23 @@ from datetime import datetime, timedelta
 from PIL import Image, ImageDraw
 import pystray
 
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
 # ── paths ──────────────────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
+BASE_DIR    = os.path.dirname(os.path.abspath(sys.argv[0]))
 CONFIG_FILE = os.path.join(BASE_DIR, "dtf_config.json")
 LOG_FILE    = os.path.join(BASE_DIR, "dtf_log.json")
 
 DEFAULT_CONFIG = {
-    "shopify_api_key":    "",
-    "shopify_store_url":  "",
-    "designs_folder":     "",
-    "hot_folder":         "",
-    "mapping_file":       "",
-    "interval_hours":     1,
-    "schedule_enabled":   True,
-    "last_run":           None,
-}
-
-COLORS = {
-    "bg":          "#1C1C1E",
-    "surface":     "#2C2C2E",
-    "surface2":    "#3A3A3C",
-    "accent":      "#0A84FF",
-    "accent_dark": "#0060CC",
-    "success":     "#30D158",
-    "warning":     "#FFD60A",
-    "danger":      "#FF453A",
-    "text":        "#FFFFFF",
-    "text2":       "#AEAEB2",
-    "text3":       "#636366",
-    "border":      "#3A3A3C",
+    "shopify_api_key":   "",
+    "shopify_store_url": "",
+    "designs_folder":    "",
+    "hot_folder":        "",
+    "mapping_file":      "",
+    "interval_hours":    1,
+    "schedule_enabled":  True,
+    "last_run":          None,
 }
 
 # ── config / log helpers ───────────────────────────────────────────────────
@@ -63,7 +52,7 @@ def load_log():
 
 def save_log(log):
     with open(LOG_FILE, "w") as f:
-        json.dump(log[-50:], f, indent=2)  # keep last 50 runs
+        json.dump(log[-50:], f, indent=2)
 
 # ── tray icon ──────────────────────────────────────────────────────────────
 def make_tray_image():
@@ -88,173 +77,169 @@ class DTFApp:
 
     # ── UI construction ────────────────────────────────────────────────────
     def _build_ui(self):
-        self.root = tk.Tk()
+        self.root = ctk.CTk()
         self.root.title("DTF Order Automation")
-        self.root.geometry("620x700")
-        self.root.configure(bg=COLORS["bg"])
+        self.root.geometry("680x740")
         self.root.resizable(False, False)
         self.root.protocol("WM_DELETE_WINDOW", self._hide_window)
 
-        style = ttk.Style(self.root)
-        style.theme_use("clam")
-        style.configure("TNotebook",            background=COLORS["bg"],  borderwidth=0)
-        style.configure("TNotebook.Tab",        background=COLORS["surface"], foreground=COLORS["text2"],
-                        padding=[16, 8], font=("Segoe UI", 10))
-        style.map("TNotebook.Tab",
-                  background=[("selected", COLORS["surface2"])],
-                  foreground=[("selected", COLORS["text"])])
-        style.configure("TFrame",   background=COLORS["bg"])
-        style.configure("TSeparator", background=COLORS["border"])
+        # ── header ──
+        header = ctk.CTkFrame(self.root, fg_color="transparent")
+        header.pack(fill="x", padx=24, pady=(20, 4))
 
-        # header
-        hdr = tk.Frame(self.root, bg=COLORS["bg"], pady=20)
-        hdr.pack(fill="x", padx=24)
-        tk.Label(hdr, text="🖨  DTF Order Automation",
-                 font=("Segoe UI", 18, "bold"),
-                 bg=COLORS["bg"], fg=COLORS["text"]).pack(side="left")
+        ctk.CTkLabel(header, text="DTF Order Automation",
+                     font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
 
-        # status pill
         self.status_var = tk.StringVar(value="● Idle")
-        self.status_lbl = tk.Label(hdr, textvariable=self.status_var,
-                                   font=("Segoe UI", 10, "bold"),
-                                   bg=COLORS["surface2"], fg=COLORS["text2"],
-                                   padx=12, pady=4, relief="flat")
+        self.status_lbl = ctk.CTkLabel(
+            header,
+            textvariable=self.status_var,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color=("#e0e0e0", "#2c2c2e"),
+            corner_radius=8,
+            padx=12, pady=4,
+            text_color="gray60",
+        )
         self.status_lbl.pack(side="right")
 
-        # notebook
-        nb = ttk.Notebook(self.root)
-        nb.pack(fill="both", expand=True, padx=16, pady=0)
+        # ── tabs ──
+        self.tabview = ctk.CTkTabview(self.root, corner_radius=12)
+        self.tabview.pack(fill="both", expand=True, padx=16, pady=(4, 16))
 
-        self._tab_dashboard(nb)
-        self._tab_last_run(nb)
-        self._tab_history(nb)
-        self._tab_settings(nb)
+        for name in ("Dashboard", "Last Run", "History", "Settings"):
+            self.tabview.add(name)
 
-        # tray
+        self._tab_dashboard()
+        self._tab_last_run()
+        self._tab_history()
+        self._tab_settings()
+
         self._setup_tray()
         self._refresh_dashboard()
 
     def _card(self, parent, title=None):
-        outer = tk.Frame(parent, bg=COLORS["surface"], bd=0, pady=0)
-        outer.pack(fill="x", padx=0, pady=6)
-        inner = tk.Frame(outer, bg=COLORS["surface"], padx=18, pady=14)
-        inner.pack(fill="x")
+        """Rounded card frame."""
+        outer = ctk.CTkFrame(parent, corner_radius=12)
+        outer.pack(fill="x", pady=5)
+        inner = ctk.CTkFrame(outer, fg_color="transparent")
+        inner.pack(fill="x", padx=18, pady=14)
         if title:
-            tk.Label(inner, text=title.upper(),
-                     font=("Segoe UI", 8, "bold"),
-                     bg=COLORS["surface"], fg=COLORS["text3"]).pack(anchor="w", pady=(0, 8))
+            ctk.CTkLabel(inner, text=title.upper(),
+                         font=ctk.CTkFont(size=9, weight="bold"),
+                         text_color="gray50").pack(anchor="w", pady=(0, 8))
         return inner
 
     # ── Dashboard tab ──────────────────────────────────────────────────────
-    def _tab_dashboard(self, nb):
-        frame = tk.Frame(nb, bg=COLORS["bg"])
-        nb.add(frame, text="  Dashboard  ")
+    def _tab_dashboard(self):
+        scroll = ctk.CTkScrollableFrame(
+            self.tabview.tab("Dashboard"), fg_color="transparent"
+        )
+        scroll.pack(fill="both", expand=True)
 
-        scroll = tk.Frame(frame, bg=COLORS["bg"])
-        scroll.pack(fill="both", expand=True, padx=16, pady=12)
-
-        # next run card
+        # next run
         c = self._card(scroll, "Next Scheduled Run")
-        self.next_run_var = tk.StringVar(value="—")
-        self.countdown_var = tk.StringVar(value="")
-        tk.Label(c, textvariable=self.next_run_var,
-                 font=("Segoe UI", 22, "bold"),
-                 bg=COLORS["surface"], fg=COLORS["text"]).pack(anchor="w")
-        tk.Label(c, textvariable=self.countdown_var,
-                 font=("Segoe UI", 11),
-                 bg=COLORS["surface"], fg=COLORS["text2"]).pack(anchor="w", pady=(2, 0))
+        self.next_run_var   = tk.StringVar(value="—")
+        self.countdown_var  = tk.StringVar(value="")
+        ctk.CTkLabel(c, textvariable=self.next_run_var,
+                     font=ctk.CTkFont(size=28, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(c, textvariable=self.countdown_var,
+                     font=ctk.CTkFont(size=12),
+                     text_color="gray55").pack(anchor="w", pady=(2, 0))
 
-        # last run card
+        # last run summary
         c2 = self._card(scroll, "Last Run")
-        self.last_run_var = tk.StringVar(value="Never")
+        self.last_run_var         = tk.StringVar(value="Never")
         self.last_run_summary_var = tk.StringVar(value="")
-        tk.Label(c2, textvariable=self.last_run_var,
-                 font=("Segoe UI", 13, "bold"),
-                 bg=COLORS["surface"], fg=COLORS["text"]).pack(anchor="w")
-        tk.Label(c2, textvariable=self.last_run_summary_var,
-                 font=("Segoe UI", 10),
-                 bg=COLORS["surface"], fg=COLORS["text2"]).pack(anchor="w", pady=(2, 0))
+        ctk.CTkLabel(c2, textvariable=self.last_run_var,
+                     font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w")
+        ctk.CTkLabel(c2, textvariable=self.last_run_summary_var,
+                     font=ctk.CTkFont(size=11),
+                     text_color="gray55").pack(anchor="w", pady=(2, 0))
 
-        # schedule toggle card
+        # schedule controls
         c3 = self._card(scroll, "Schedule")
-        row = tk.Frame(c3, bg=COLORS["surface"])
-        row.pack(fill="x")
-        self.sched_enabled_var = tk.BooleanVar(value=self.config["schedule_enabled"])
-        tk.Label(row, text="Run automatically every",
-                 font=("Segoe UI", 11),
-                 bg=COLORS["surface"], fg=COLORS["text"]).pack(side="left")
-        self.interval_var = tk.StringVar(value=str(self.config["interval_hours"]))
-        spin = tk.Spinbox(row, from_=1, to=24, width=3,
-                          textvariable=self.interval_var,
-                          font=("Segoe UI", 11),
-                          bg=COLORS["surface2"], fg=COLORS["text"],
-                          buttonbackground=COLORS["surface2"],
-                          relief="flat", bd=4,
-                          command=self._save_interval)
-        spin.pack(side="left", padx=8)
-        tk.Label(row, text="hour(s)",
-                 font=("Segoe UI", 11),
-                 bg=COLORS["surface"], fg=COLORS["text"]).pack(side="left")
 
-        row2 = tk.Frame(c3, bg=COLORS["surface"])
-        row2.pack(fill="x", pady=(10, 0))
-        self.toggle_btn = tk.Button(row2,
-                                    text="⏸  Pause Schedule" if self.config["schedule_enabled"] else "▶  Resume Schedule",
-                                    font=("Segoe UI", 10, "bold"),
-                                    bg=COLORS["surface2"], fg=COLORS["text2"],
-                                    activebackground=COLORS["border"],
-                                    relief="flat", bd=0, padx=14, pady=7,
-                                    cursor="hand2",
-                                    command=self._toggle_schedule)
-        self.toggle_btn.pack(side="left")
+        interval_row = ctk.CTkFrame(c3, fg_color="transparent")
+        interval_row.pack(fill="x")
 
-        # run now button
+        ctk.CTkLabel(interval_row, text="Run automatically every",
+                     font=ctk.CTkFont(size=12)).pack(side="left")
+
+        self.interval_var = tk.IntVar(value=self.config["interval_hours"])
+
+        spin = ctk.CTkFrame(interval_row, fg_color="transparent")
+        spin.pack(side="left", padx=10)
+        ctk.CTkButton(spin, text="−", width=30, height=30, corner_radius=6,
+                      command=lambda: self._adjust_interval(-1)).pack(side="left")
+        ctk.CTkLabel(spin, textvariable=self.interval_var,
+                     font=ctk.CTkFont(size=13, weight="bold"),
+                     width=34).pack(side="left")
+        ctk.CTkButton(spin, text="+", width=30, height=30, corner_radius=6,
+                      command=lambda: self._adjust_interval(1)).pack(side="left")
+
+        ctk.CTkLabel(interval_row, text="hour(s)",
+                     font=ctk.CTkFont(size=12)).pack(side="left")
+
+        switch_row = ctk.CTkFrame(c3, fg_color="transparent")
+        switch_row.pack(fill="x", pady=(12, 0))
+
+        self.sched_switch = ctk.CTkSwitch(
+            switch_row, text="Schedule enabled",
+            font=ctk.CTkFont(size=12),
+            command=self._toggle_schedule,
+        )
+        if self.config["schedule_enabled"]:
+            self.sched_switch.select()
+        else:
+            self.sched_switch.deselect()
+        self.sched_switch.pack(side="left")
+
+        # run now
         c4 = self._card(scroll)
-        self.run_btn = tk.Button(c4,
-                                 text="▶  Run Now",
-                                 font=("Segoe UI", 13, "bold"),
-                                 bg=COLORS["accent"], fg="white",
-                                 activebackground=COLORS["accent_dark"],
-                                 relief="flat", bd=0, padx=0, pady=12,
-                                 cursor="hand2",
-                                 command=self._run_now)
+        self.run_btn = ctk.CTkButton(
+            c4, text="▶  Run Now",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            height=50, corner_radius=10,
+            command=self._run_now,
+        )
         self.run_btn.pack(fill="x")
 
     # ── Last Run tab ───────────────────────────────────────────────────────
-    def _tab_last_run(self, nb):
-        frame = tk.Frame(nb, bg=COLORS["bg"])
-        nb.add(frame, text="  Last Run  ")
-
-        self.last_run_detail = scrolledtext.ScrolledText(
-            frame, font=("Consolas", 10),
-            bg=COLORS["surface"], fg=COLORS["text"],
-            insertbackground=COLORS["text"],
-            relief="flat", bd=0, padx=16, pady=16,
-            state="disabled"
+    def _tab_last_run(self):
+        self.last_run_detail = ctk.CTkTextbox(
+            self.tabview.tab("Last Run"),
+            font=ctk.CTkFont(family="Consolas", size=11),
+            wrap="none",
+            state="disabled",
+            corner_radius=10,
         )
-        self.last_run_detail.pack(fill="both", expand=True, padx=16, pady=12)
+        self.last_run_detail.pack(fill="both", expand=True, padx=4, pady=4)
         self._refresh_last_run_tab()
 
     # ── History tab ────────────────────────────────────────────────────────
-    def _tab_history(self, nb):
-        frame = tk.Frame(nb, bg=COLORS["bg"])
-        nb.add(frame, text="  History  ")
+    def _tab_history(self):
+        tab = self.tabview.tab("History")
+
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Dark.Treeview",
+                        background="#2b2b2b",
+                        foreground="#ffffff",
+                        fieldbackground="#2b2b2b",
+                        rowheight=30,
+                        font=("Segoe UI", 10),
+                        borderwidth=0)
+        style.configure("Dark.Treeview.Heading",
+                        background="#3a3a3a",
+                        foreground="#aaaaaa",
+                        font=("Segoe UI", 9, "bold"),
+                        relief="flat")
+        style.map("Dark.Treeview",
+                  background=[("selected", "#1f6aa5")])
 
         cols = ("date", "orders", "skipped", "status")
-        self.hist_tree = ttk.Treeview(frame, columns=cols, show="headings", height=18)
-        style = ttk.Style()
-        style.configure("Treeview",
-                        background=COLORS["surface"],
-                        foreground=COLORS["text"],
-                        fieldbackground=COLORS["surface"],
-                        rowheight=28,
-                        font=("Segoe UI", 10))
-        style.configure("Treeview.Heading",
-                        background=COLORS["surface2"],
-                        foreground=COLORS["text2"],
-                        font=("Segoe UI", 9, "bold"))
-        style.map("Treeview", background=[("selected", COLORS["accent"])])
-
+        self.hist_tree = ttk.Treeview(tab, columns=cols, show="headings",
+                                      style="Dark.Treeview", height=18)
         self.hist_tree.heading("date",    text="Date & Time")
         self.hist_tree.heading("orders",  text="Orders Processed")
         self.hist_tree.heading("skipped", text="Skipped")
@@ -264,60 +249,52 @@ class DTFApp:
         self.hist_tree.column("skipped", width=100, anchor="center")
         self.hist_tree.column("status",  width=120, anchor="center")
 
-        sb = ttk.Scrollbar(frame, orient="vertical", command=self.hist_tree.yview)
+        sb = ttk.Scrollbar(tab, orient="vertical", command=self.hist_tree.yview)
         self.hist_tree.configure(yscrollcommand=sb.set)
-        self.hist_tree.pack(side="left", fill="both", expand=True, padx=(16, 0), pady=12)
-        sb.pack(side="right", fill="y", pady=12, padx=(0, 8))
+        self.hist_tree.pack(side="left", fill="both", expand=True, padx=(4, 0), pady=4)
+        sb.pack(side="right", fill="y", pady=4, padx=(0, 4))
         self._refresh_history()
 
     # ── Settings tab ──────────────────────────────────────────────────────
-    def _tab_settings(self, nb):
-        frame = tk.Frame(nb, bg=COLORS["bg"])
-        nb.add(frame, text="  Settings  ")
-
-        scroll = tk.Frame(frame, bg=COLORS["bg"])
-        scroll.pack(fill="both", expand=True, padx=16, pady=12)
+    def _tab_settings(self):
+        scroll = ctk.CTkScrollableFrame(
+            self.tabview.tab("Settings"), fg_color="transparent"
+        )
+        scroll.pack(fill="both", expand=True)
 
         fields = [
-            ("Shopify Store URL",  "shopify_store_url",  "e.g. mystore.myshopify.com"),
-            ("Shopify API Key",    "shopify_api_key",    "Admin API access token"),
-            ("Designs Folder",     "designs_folder",     "Local folder containing design PNG/JPG files"),
-            ("Mapping File",       "mapping_file",       "Path to order_mapping.xlsx"),
-            ("Hot Folder",         "hot_folder",         "CADlink hot folder path"),
+            ("Shopify Store URL", "shopify_store_url", "e.g. mystore.myshopify.com"),
+            ("Shopify API Key",   "shopify_api_key",   "Admin API access token"),
+            ("Designs Folder",    "designs_folder",    "Folder containing design PNG/JPG files"),
+            ("Mapping File",      "mapping_file",      "Path to order_mapping.xlsx"),
+            ("Hot Folder",        "hot_folder",        "CADlink hot folder path"),
         ]
 
         self.setting_vars = {}
-        for label, key, placeholder in fields:
+        for label, key, hint in fields:
             c = self._card(scroll, label)
             var = tk.StringVar(value=self.config.get(key, ""))
             self.setting_vars[key] = var
-            entry = tk.Entry(c, textvariable=var,
-                             font=("Segoe UI", 11),
-                             bg=COLORS["surface2"], fg=COLORS["text"],
-                             insertbackground=COLORS["text"],
-                             relief="flat", bd=6)
-            entry.pack(fill="x")
-            tk.Label(c, text=placeholder,
-                     font=("Segoe UI", 9),
-                     bg=COLORS["surface"], fg=COLORS["text3"]).pack(anchor="w", pady=(4, 0))
+            ctk.CTkEntry(c, textvariable=var,
+                         font=ctk.CTkFont(size=12),
+                         height=36, corner_radius=8).pack(fill="x")
+            ctk.CTkLabel(c, text=hint,
+                         font=ctk.CTkFont(size=10),
+                         text_color="gray50").pack(anchor="w", pady=(4, 0))
 
-        save_btn = tk.Button(scroll,
-                             text="Save Settings",
-                             font=("Segoe UI", 11, "bold"),
-                             bg=COLORS["accent"], fg="white",
-                             activebackground=COLORS["accent_dark"],
-                             relief="flat", bd=0, padx=0, pady=10,
-                             cursor="hand2",
-                             command=self._save_settings)
-        save_btn.pack(fill="x", pady=(8, 0))
+        c_btn = self._card(scroll)
+        ctk.CTkButton(c_btn, text="Save Settings",
+                      font=ctk.CTkFont(size=13, weight="bold"),
+                      height=44, corner_radius=10,
+                      command=self._save_settings).pack(fill="x")
 
     # ── Tray setup ─────────────────────────────────────────────────────────
     def _setup_tray(self):
         menu = pystray.Menu(
-            pystray.MenuItem("Open",     lambda: self.root.after(0, self._show_window), default=True),
-            pystray.MenuItem("Run Now",  lambda: self.root.after(0, self._run_now)),
+            pystray.MenuItem("Open",    lambda: self.root.after(0, self._show_window), default=True),
+            pystray.MenuItem("Run Now", lambda: self.root.after(0, self._run_now)),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quit",     lambda: self.root.after(0, self._quit)),
+            pystray.MenuItem("Quit",    lambda: self.root.after(0, self._quit)),
         )
         self.tray = pystray.Icon("DTF", make_tray_image(), "DTF Automation", menu)
         threading.Thread(target=self.tray.run, daemon=True).start()
@@ -342,7 +319,7 @@ class DTFApp:
 
     def _schedule_next(self):
         if self.config["schedule_enabled"]:
-            hours = int(self.interval_var.get()) if hasattr(self, "interval_var") else self.config["interval_hours"]
+            hours = self.interval_var.get() if hasattr(self, "interval_var") else self.config["interval_hours"]
             self.next_run_dt = datetime.now() + timedelta(hours=hours)
         else:
             self.next_run_dt = None
@@ -359,8 +336,8 @@ class DTFApp:
         if self.running:
             return
         self.running = True
-        self.run_btn.config(state="disabled", text="⏳  Running…")
-        self._set_status("● Running", COLORS["warning"])
+        self.run_btn.configure(state="disabled", text="⏳  Running…")
+        self._set_status("● Running", "#FFD60A")
         threading.Thread(target=self._do_run, daemon=True).start()
 
     def _do_run(self):
@@ -374,22 +351,25 @@ class DTFApp:
         self.root.after(0, self._on_run_complete, result)
 
     def _on_run_complete(self, result):
-        self.run_btn.config(state="normal", text="▶  Run Now")
-        status = "✓ Success" if result["status"] == "success" else "⚠ Completed with issues"
-        color  = COLORS["success"] if result["status"] == "success" else COLORS["warning"]
-        self._set_status(f"● {status}", color)
+        self.run_btn.configure(state="normal", text="▶  Run Now")
+        if result["status"] == "success":
+            status_text  = "● Success"
+            status_color = "#30D158"
+        else:
+            status_text  = "● Completed with issues"
+            status_color = "#FFD60A"
+        self._set_status(status_text, status_color)
         self._refresh_dashboard()
         self._refresh_last_run_tab()
         self._refresh_history()
-        self.root.after(5000, lambda: self._set_status("● Idle", COLORS["text2"]))
+        self.root.after(5000, lambda: self._set_status("● Idle", "gray60"))
 
     # ── UI helpers ─────────────────────────────────────────────────────────
     def _set_status(self, text, color):
         self.status_var.set(text)
-        self.status_lbl.config(fg=color)
+        self.status_lbl.configure(text_color=color)
 
     def _refresh_dashboard(self):
-        # last run
         if self.config["last_run"]:
             dt = datetime.fromisoformat(self.config["last_run"])
             self.last_run_var.set(dt.strftime("%b %d, %Y at %I:%M %p"))
@@ -404,7 +384,6 @@ class DTFApp:
             self.last_run_var.set("Never")
             self.last_run_summary_var.set("No runs yet")
 
-        # next run
         if self.next_run_dt and self.config["schedule_enabled"]:
             self.next_run_var.set(self.next_run_dt.strftime("%I:%M %p"))
             delta = self.next_run_dt - datetime.now()
@@ -412,10 +391,7 @@ class DTFApp:
             if total > 0:
                 h, rem = divmod(total, 3600)
                 m, s   = divmod(rem, 60)
-                if h > 0:
-                    self.countdown_var.set(f"in {h}h {m}m {s}s")
-                else:
-                    self.countdown_var.set(f"in {m}m {s}s")
+                self.countdown_var.set(f"in {h}h {m}m {s}s" if h > 0 else f"in {m}m {s}s")
             else:
                 self.countdown_var.set("Running now…")
         else:
@@ -423,7 +399,7 @@ class DTFApp:
             self.countdown_var.set("Schedule is disabled")
 
     def _refresh_last_run_tab(self):
-        self.last_run_detail.config(state="normal")
+        self.last_run_detail.configure(state="normal")
         self.last_run_detail.delete("1.0", "end")
         if not self.log:
             self.last_run_detail.insert("end", "No runs yet.\n")
@@ -454,7 +430,7 @@ class DTFApp:
                     lines.append(f"  →  {f}")
 
             self.last_run_detail.insert("end", "\n".join(lines))
-        self.last_run_detail.config(state="disabled")
+        self.last_run_detail.configure(state="disabled")
 
     def _refresh_history(self):
         for row in self.hist_tree.get_children():
@@ -468,28 +444,24 @@ class DTFApp:
                                           r.get("skipped", 0),
                                           "✓ Success" if r["status"] == "success" else "⚠ Issues"),
                                   tags=(tag,))
-        self.hist_tree.tag_configure("ok",   foreground=COLORS["success"])
-        self.hist_tree.tag_configure("warn", foreground=COLORS["warning"])
+        self.hist_tree.tag_configure("ok",   foreground="#30D158")
+        self.hist_tree.tag_configure("warn", foreground="#FFD60A")
 
     def _toggle_schedule(self):
-        self.config["schedule_enabled"] = not self.config["schedule_enabled"]
+        self.config["schedule_enabled"] = bool(self.sched_switch.get())
         save_config(self.config)
         if self.config["schedule_enabled"]:
             self._schedule_next()
-            self.toggle_btn.config(text="⏸  Pause Schedule")
         else:
             self.next_run_dt = None
-            self.toggle_btn.config(text="▶  Resume Schedule")
         self._refresh_dashboard()
 
-    def _save_interval(self):
-        try:
-            hours = int(self.interval_var.get())
-            self.config["interval_hours"] = hours
-            save_config(self.config)
-            self._schedule_next()
-        except ValueError:
-            pass
+    def _adjust_interval(self, delta):
+        val = max(1, min(24, self.interval_var.get() + delta))
+        self.interval_var.set(val)
+        self.config["interval_hours"] = val
+        save_config(self.config)
+        self._schedule_next()
 
     def _save_settings(self):
         for key, var in self.setting_vars.items():
@@ -548,8 +520,8 @@ def run_automation(config):
         return result
 
     for order in orders:
-        order_id    = order.get("name", order.get("id", "?"))
-        line_items  = order.get("line_items", [])
+        order_id   = order.get("name", order.get("id", "?"))
+        line_items = order.get("line_items", [])
 
         for item in line_items:
             product_name = item.get("name", "").strip()
@@ -603,7 +575,7 @@ def run_automation(config):
                 time.sleep(0.1)  # jhdr must arrive before image
                 shutil.copy2(design_path, img_dst)
 
-                result["files_queued"]    += 1
+                result["files_queued"]     += 1
                 result["orders_processed"] += 1
                 result["hot_folder_files"].extend([jhdr_name, img_name])
                 result["order_details"].append({
@@ -636,7 +608,7 @@ def _calculate_size(design_path, size, child_sizes):
     with PILImage.open(design_path) as img:
         w_px, h_px = img.size
 
-    is_child    = size.upper() in child_sizes
+    is_child     = size.upper() in child_sizes
     is_landscape = w_px > h_px
 
     if is_landscape:

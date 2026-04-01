@@ -77,7 +77,7 @@ echo  [2/4] Installing dependencies...
 echo Step 2: pip >> "%LOG%"
 
 python -m pip install --upgrade pip >> "%LOG%" 2>&1
-python -m pip install pillow pystray openpyxl pyinstaller >> "%LOG%" 2>&1
+python -m pip install pillow pystray openpyxl pyinstaller customtkinter >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo FAILED: pip install >> "%LOG%"
     echo.
