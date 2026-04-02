@@ -22,13 +22,16 @@ LOG_FILE     = os.path.join(BASE_DIR, "dtf_log.json")
 MAPPING_FILE = os.path.join(BASE_DIR, "dtf_mapping.json")
 
 DEFAULT_CONFIG = {
-    "shopify_api_key":   "",
-    "shopify_store_url": "",
-    "designs_folder":    "",
-    "hot_folder":        "",
-    "interval_hours":    1,
-    "schedule_enabled":  True,
-    "last_run":          None,
+    "shopify_store_url":   "",
+    "shopify_client_id":   "",
+    "shopify_client_secret": "",
+    "shopify_token":       "",
+    "shopify_token_expiry": "",
+    "designs_folder":      "",
+    "hot_folder":          "",
+    "interval_hours":      1,
+    "schedule_enabled":    True,
+    "last_run":            None,
 }
 
 # ── config / log / mapping helpers ────────────────────────────────────────
@@ -260,7 +263,7 @@ class DTFApp:
         self.mapping_placeholder.pack(pady=48)
 
     def _sync_products(self):
-        if not self.config.get("shopify_store_url") or not self.config.get("shopify_api_key"):
+        if not self.config.get("shopify_store_url") or not self.config.get("shopify_client_id") or not self.config.get("shopify_client_secret"):
             messagebox.showwarning(
                 "Missing settings",
                 "Enter your Shopify Store URL and API Key in the Settings tab first."
@@ -401,10 +404,11 @@ class DTFApp:
         scroll.pack(fill="both", expand=True)
 
         fields = [
-            ("Shopify Store URL", "shopify_store_url", "e.g. mystore.myshopify.com"),
-            ("Shopify API Key",   "shopify_api_key",   "Admin API access token"),
-            ("Designs Folder",    "designs_folder",    "Folder containing design PNG/JPG files"),
-            ("Hot Folder",        "hot_folder",        "CADlink hot folder path"),
+            ("Shopify Store URL",   "shopify_store_url",     "e.g. mystore.myshopify.com"),
+            ("Shopify Client ID",   "shopify_client_id",     "Client ID from Dev Dashboard → Settings"),
+            ("Shopify Client Secret", "shopify_client_secret", "Client Secret from Dev Dashboard → Settings"),
+            ("Designs Folder",      "designs_folder",        "Folder containing design PNG/JPG files"),
+            ("Hot Folder",          "hot_folder",            "CADlink hot folder path"),
         ]
 
         self.setting_vars = {}
@@ -821,14 +825,63 @@ def _write_jhdr(path, width_in, height_in):
         f.write(xml)
 
 
+def get_shopify_token(config):
+    """
+    Obtain an access token via the client credentials grant.
+    Returns a cached token if still valid, otherwise requests a new one
+    and saves it to config. Token is valid for 24 hours; we refresh at 23.
+    """
+    import urllib.request
+
+    store         = config.get("shopify_store_url", "").strip().rstrip("/")
+    client_id     = config.get("shopify_client_id", "").strip()
+    client_secret = config.get("shopify_client_secret", "").strip()
+
+    if not store or not client_id or not client_secret:
+        return None
+
+    # return cached token if still fresh
+    expiry = config.get("shopify_token_expiry", "")
+    token  = config.get("shopify_token", "")
+    if token and expiry:
+        try:
+            if datetime.fromisoformat(expiry) > datetime.now():
+                return token
+        except ValueError:
+            pass
+
+    # request a new token
+    url  = f"https://{store}/admin/oauth/access_token"
+    body = json.dumps({
+        "grant_type":    "client_credentials",
+        "client_id":     client_id,
+        "client_secret": client_secret,
+    }).encode()
+    req = urllib.request.Request(url, data=body,
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data  = json.loads(resp.read())
+            token = data.get("access_token")
+            if token:
+                config["shopify_token"]        = token
+                config["shopify_token_expiry"] = (datetime.now() + timedelta(hours=23)).isoformat()
+                save_config(config)
+            return token
+    except Exception:
+        return None
+
+
 def fetch_shopify_orders(config):
     import urllib.request
     store = config.get("shopify_store_url", "").strip().rstrip("/")
-    key   = config.get("shopify_api_key", "").strip()
-    if not store or not key:
+    if not store:
         return []
+    token = get_shopify_token(config)
+    if not token:
+        return None
     url = f"https://{store}/admin/api/2024-01/orders.json?status=open&fulfillment_status=unfulfilled&limit=250"
-    req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": key, "Content-Type": "application/json"})
+    req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=8) as resp:
             return json.loads(resp.read()).get("orders", [])
@@ -839,14 +892,16 @@ def fetch_shopify_orders(config):
 def fetch_shopify_products(config):
     import urllib.request
     store = config.get("shopify_store_url", "").strip().rstrip("/")
-    key   = config.get("shopify_api_key", "").strip()
-    if not store or not key:
+    if not store:
         return []
+    token = get_shopify_token(config)
+    if not token:
+        return None
 
     products = []
     url = f"https://{store}/admin/api/2024-01/products.json?limit=250&fields=id,title"
     while url:
-        req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": key, "Content-Type": "application/json"})
+        req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=8) as resp:
                 products.extend(json.loads(resp.read()).get("products", []))
