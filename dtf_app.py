@@ -241,10 +241,10 @@ class DTFApp:
         self._page          = 0
         self._unmapped_only = tk.BooleanVar(value=False)
 
-        # ── IMPORTANT: pack bottom-anchored widgets FIRST so the expanding
-        #   scroll area fills only what's left, not the whole tab.
+        # Pack order matters: bottom widgets first, then top-to-bottom for
+        # everything else, expanding scroll frame last.
 
-        # ── pagination bar (bottom) ───────────────────────────────────────
+        # ── pagination bar — pack FIRST so it anchors the bottom ──────────
         pbar = ctk.CTkFrame(tab, fg_color="transparent")
         pbar.pack(side="bottom", fill="x", padx=8, pady=(4, 8))
 
@@ -263,19 +263,6 @@ class DTFApp:
             command=self._page_next,
         )
         self._next_btn.pack(side="right")
-
-        # ── column headers (bottom, above pagination) ─────────────────────
-        hdr_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        hdr_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 2))
-        ctk.CTkFrame(hdr_frame, height=1, fg_color=("gray75", "gray30")).pack(
-            fill="x", pady=(0, 4))
-        hdr = ctk.CTkFrame(hdr_frame, fg_color="transparent")
-        hdr.pack(fill="x", padx=8)
-        ctk.CTkLabel(hdr, text="PRODUCT", font=ctk.CTkFont(size=9, weight="bold"),
-                     text_color="gray50", anchor="w").pack(side="left", expand=True, fill="x")
-        ctk.CTkLabel(hdr, text="DESIGN FILE", font=ctk.CTkFont(size=9, weight="bold"),
-                     text_color="gray50", width=200, anchor="w").pack(side="left")
-        ctk.CTkFrame(hdr, width=90, fg_color="transparent").pack(side="left")
 
         # ── top bar ────────────────────────────────────────────────────────
         top = ctk.CTkFrame(tab, fg_color="transparent")
@@ -318,9 +305,20 @@ class DTFApp:
         )
         self._unmapped_chk.pack(side="left", padx=16)
 
-        # ── scrollable rows (fills remaining space) ───────────────────────
+        # ── column headers ────────────────────────────────────────────────
+        ctk.CTkFrame(tab, height=1, fg_color=("gray75", "gray30")).pack(
+            side="top", fill="x", padx=8, pady=(8, 0))
+        hdr = ctk.CTkFrame(tab, fg_color="transparent")
+        hdr.pack(side="top", fill="x", padx=16, pady=(4, 2))
+        ctk.CTkLabel(hdr, text="PRODUCT", font=ctk.CTkFont(size=9, weight="bold"),
+                     text_color="gray50", anchor="w").pack(side="left", expand=True, fill="x")
+        ctk.CTkLabel(hdr, text="DESIGN FILE", font=ctk.CTkFont(size=9, weight="bold"),
+                     text_color="gray50", width=200, anchor="w").pack(side="left")
+        ctk.CTkFrame(hdr, width=90, fg_color="transparent").pack(side="left")
+
+        # ── scrollable rows — fills all remaining space ───────────────────
         self.mapping_scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
-        self.mapping_scroll.pack(side="top", fill="both", expand=True, padx=8, pady=(6, 0))
+        self.mapping_scroll.pack(side="top", fill="both", expand=True, padx=8, pady=(2, 0))
 
         ctk.CTkLabel(
             self.mapping_scroll,
