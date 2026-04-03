@@ -1,3 +1,18 @@
+import os
+import sys
+
+# ── PyInstaller SSL fix ────────────────────────────────────────────────────
+# When bundled with --onefile, requests can't find certifi's CA bundle via
+# the normal path. Force it explicitly before any network code runs.
+if getattr(sys, "frozen", False):
+    try:
+        import certifi
+        _ca = certifi.where()
+        os.environ.setdefault("REQUESTS_CA_BUNDLE", _ca)
+        os.environ.setdefault("SSL_CERT_FILE", _ca)
+    except Exception:
+        pass
+
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -5,9 +20,7 @@ import threading
 import queue
 import time
 import json
-import os
 import shutil
-import sys
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw
 import pystray

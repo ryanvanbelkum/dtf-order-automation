@@ -102,6 +102,7 @@ python -m PyInstaller ^
     --onefile ^
     --windowed ^
     --name "DTF Order Automation" ^
+    --collect-data certifi ^
     --distpath "%DIST_DIR%" ^
     --workpath "%TEMP%\dtf_build" ^
     --specpath "%TEMP%\dtf_build" ^
