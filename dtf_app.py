@@ -232,11 +232,16 @@ class DTFApp:
         self.run_btn.pack(fill="x")
 
     # ── Mapping tab ────────────────────────────────────────────────────────
+    _PAGE_SIZE = 50
+
     def _tab_mapping(self):
         tab = self.tabview.tab("Mapping")
-        self._all_products = []   # full list from Shopify
+        self._all_products  = []   # full list from Shopify (titles)
+        self._filtered      = []   # current filtered+sorted list
+        self._page          = 0    # current page index (0-based)
+        self._unmapped_only = tk.BooleanVar(value=False)
 
-        # top bar
+        # ── top bar ────────────────────────────────────────────────────────
         top = ctk.CTkFrame(tab, fg_color="transparent")
         top.pack(fill="x", padx=8, pady=(8, 0))
 
@@ -254,48 +259,76 @@ class DTFApp:
         ctk.CTkButton(top, text="Save Mappings", width=130,
                       command=self._save_mappings).pack(side="right")
 
-        # search bar (disabled until products load)
-        search_bar = ctk.CTkFrame(tab, fg_color="transparent")
-        search_bar.pack(fill="x", padx=8, pady=(6, 0))
-        ctk.CTkLabel(search_bar, text="Search:", font=ctk.CTkFont(size=12),
+        # ── filter bar ────────────────────────────────────────────────────
+        fbar = ctk.CTkFrame(tab, fg_color="transparent")
+        fbar.pack(fill="x", padx=8, pady=(8, 0))
+
+        ctk.CTkLabel(fbar, text="Search:", font=ctk.CTkFont(size=12),
                      text_color="gray55").pack(side="left", padx=(8, 6))
+
         self._search_var = tk.StringVar()
-        self._search_var.trace_add("write", lambda *_: self._apply_search())
-        self._search_entry = ctk.CTkEntry(search_bar, textvariable=self._search_var,
-                                          placeholder_text="Sync products first…", width=320,
-                                          state="disabled")
+        self._search_var.trace_add("write", lambda *_: self._reset_and_render())
+        self._search_entry = ctk.CTkEntry(
+            fbar, textvariable=self._search_var,
+            placeholder_text="Sync products first…", width=280, state="disabled",
+        )
         self._search_entry.pack(side="left")
 
-        # divider
-        ctk.CTkFrame(tab, height=1, fg_color=("gray75", "gray30")).pack(
-            fill="x", padx=8, pady=8
+        self._unmapped_chk = ctk.CTkCheckBox(
+            fbar, text="Unmapped only",
+            variable=self._unmapped_only,
+            command=self._reset_and_render,
+            state="disabled",
         )
+        self._unmapped_chk.pack(side="left", padx=16)
 
-        # column headers
+        # ── column headers ────────────────────────────────────────────────
+        ctk.CTkFrame(tab, height=1, fg_color=("gray75", "gray30")).pack(
+            fill="x", padx=8, pady=(8, 4))
+
         hdr = ctk.CTkFrame(tab, fg_color="transparent")
         hdr.pack(fill="x", padx=16)
-        ctk.CTkLabel(hdr, text="PRODUCT",
-                     font=ctk.CTkFont(size=9, weight="bold"),
+        ctk.CTkLabel(hdr, text="PRODUCT", font=ctk.CTkFont(size=9, weight="bold"),
                      text_color="gray50", anchor="w").pack(side="left", expand=True, fill="x")
-        ctk.CTkLabel(hdr, text="DESIGN FILE",
-                     font=ctk.CTkFont(size=9, weight="bold"),
+        ctk.CTkLabel(hdr, text="DESIGN FILE", font=ctk.CTkFont(size=9, weight="bold"),
                      text_color="gray50", width=200, anchor="w").pack(side="left")
-        ctk.CTkFrame(hdr, width=90, fg_color="transparent").pack(side="left")  # spacer for Browse btn
+        ctk.CTkFrame(hdr, width=90, fg_color="transparent").pack(side="left")
 
-        # scrollable list
+        # ── scrollable rows ───────────────────────────────────────────────
         self.mapping_scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
-        self.mapping_scroll.pack(fill="both", expand=True, padx=8, pady=4)
+        self.mapping_scroll.pack(fill="both", expand=True, padx=8, pady=(4, 0))
 
-        self.mapping_placeholder = ctk.CTkLabel(
+        ctk.CTkLabel(
             self.mapping_scroll,
             text='Click "Sync Products from Shopify" to load your product list.',
-            font=ctk.CTkFont(size=12),
-            text_color="gray50",
-        )
-        self.mapping_placeholder.pack(pady=48)
+            font=ctk.CTkFont(size=12), text_color="gray50",
+        ).pack(pady=48)
 
+        # ── pagination bar ────────────────────────────────────────────────
+        pbar = ctk.CTkFrame(tab, fg_color="transparent")
+        pbar.pack(fill="x", padx=8, pady=(4, 8))
+
+        self._prev_btn = ctk.CTkButton(
+            pbar, text="← Prev", width=90, state="disabled",
+            command=self._page_prev,
+        )
+        self._prev_btn.pack(side="left")
+
+        self._page_label = ctk.CTkLabel(pbar, text="", font=ctk.CTkFont(size=12),
+                                        text_color="gray55")
+        self._page_label.pack(side="left", expand=True)
+
+        self._next_btn = ctk.CTkButton(
+            pbar, text="Next →", width=90, state="disabled",
+            command=self._page_next,
+        )
+        self._next_btn.pack(side="right")
+
+    # ── sync ───────────────────────────────────────────────────────────────
     def _sync_products(self):
-        if not self.config.get("shopify_store_url") or not self.config.get("shopify_client_id") or not self.config.get("shopify_client_secret"):
+        if not self.config.get("shopify_store_url") or \
+           not self.config.get("shopify_client_id") or \
+           not self.config.get("shopify_client_secret"):
             messagebox.showwarning(
                 "Missing settings",
                 "Enter your Shopify Store URL and API Key in the Settings tab first."
@@ -309,27 +342,24 @@ class DTFApp:
         def status(msg):
             self.root.after(0, self.sync_status_var.set, msg)
 
-        status("Step 1/3: building HTTP session…")
         try:
-            # check if we have a cached token so we know if step 2 hits the network
             cached = bool(self.config.get("shopify_token") and self.config.get("shopify_token_expiry"))
-            status(f"Step 2/3: {'using cached token' if cached else 'requesting Shopify token (network)'}…")
+            status(f"{'Using cached token' if cached else 'Requesting token…'}")
             token = get_shopify_token(self.config)
         except RuntimeError as e:
             self.root.after(0, self._on_products_synced, None, f"✗ Auth failed: {e}")
             return
         if not token:
             self.root.after(0, self._on_products_synced, None,
-                            "✗ No token returned — check Client ID, Secret, and Store URL in Settings")
+                            "✗ No token — check Client ID, Secret, and Store URL in Settings")
             return
 
-        status("Step 3/3: fetching products from Shopify (network)…")
+        status("Fetching products from Shopify…")
         products, error = fetch_shopify_products(self.config, token)
         self.root.after(0, self._on_products_synced, products, error)
 
     def _on_products_synced(self, products, error=None):
         self.sync_btn.configure(state="normal", text="↻  Sync Products from Shopify")
-
         if products is None:
             self.sync_status_var.set(error or "✗ Could not connect to Shopify")
             return
@@ -338,58 +368,81 @@ class DTFApp:
             return
 
         self._all_products = [p["title"] for p in products]
-        n = len(self._all_products)
-        mapped_count = sum(1 for t in self._all_products if t in self._mappings)
-        self.sync_status_var.set(f"{n} products — {mapped_count} mapped")
-        self._search_entry.configure(state="normal", placeholder_text="Type to filter products…")
+        self._search_entry.configure(state="normal", placeholder_text="Filter by name…")
+        self._unmapped_chk.configure(state="normal")
         self._search_var.set("")
-        self._apply_search()
+        self._reset_and_render()
 
-    def _apply_search(self):
-        """Rebuild the visible rows based on the current search query.
+    # ── filtering / pagination ─────────────────────────────────────────────
+    def _build_filtered(self):
+        """Return filtered, sorted list: mapped products first, then alphabetical."""
+        query        = self._search_var.get().strip().lower()
+        unmapped_only = self._unmapped_only.get()
 
-        Always shows already-mapped products first (up to 200).
-        When the user types, shows the first 50 matching unmapped products.
-        Never renders more than 250 rows total so the UI stays responsive.
-        """
-        if not self._all_products:
-            return
+        results = []
+        for title in self._all_products:
+            is_mapped = title in self._mappings
+            if unmapped_only and is_mapped:
+                continue
+            if query and query not in title.lower():
+                continue
+            results.append(title)
 
-        query = self._search_var.get().strip().lower()
+        # mapped first, then alpha
+        results.sort(key=lambda t: (0 if t in self._mappings else 1, t.lower()))
+        return results
 
-        # split into mapped vs unmapped
-        mapped   = [t for t in self._all_products if t in self._mappings]
-        unmapped = [t for t in self._all_products if t not in self._mappings]
+    def _reset_and_render(self):
+        self._page     = 0
+        self._filtered = self._build_filtered()
+        self._render_page()
 
-        # filter unmapped by search query (show all mapped regardless)
-        if query:
-            unmapped = [t for t in unmapped if query in t.lower()][:50]
-        else:
-            unmapped = []   # no search → only show mapped products
+    def _page_prev(self):
+        if self._page > 0:
+            self._page -= 1
+            self._render_page()
 
-        to_render = mapped + unmapped
+    def _page_next(self):
+        total_pages = max(1, -(-len(self._filtered) // self._PAGE_SIZE))
+        if self._page < total_pages - 1:
+            self._page += 1
+            self._render_page()
 
-        # destroy old widgets
+    def _render_page(self):
+        # clear rows
         for w in self.mapping_scroll.winfo_children():
             w.destroy()
         self._mapping_rows = {}
 
-        if not to_render:
-            msg = ("No products mapped yet. Search above to find a product and assign a design file."
-                   if not query else f'No products match "{query}".')
-            ctk.CTkLabel(self.mapping_scroll, text=msg,
-                         font=ctk.CTkFont(size=12), text_color="gray50",
-                         wraplength=500).pack(pady=48)
-            return
+        total   = len(self._filtered)
+        n_pages = max(1, -(-total // self._PAGE_SIZE))   # ceiling div
+        page    = max(0, min(self._page, n_pages - 1))
+        start   = page * self._PAGE_SIZE
+        visible = self._filtered[start : start + self._PAGE_SIZE]
 
-        for title in to_render:
-            self._add_mapping_row(title)
+        # update status
+        mapped_count = sum(1 for t in self._all_products if t in self._mappings)
+        self.sync_status_var.set(
+            f"{len(self._all_products)} products — {mapped_count} mapped"
+            + (f" — {total} shown" if total != len(self._all_products) else "")
+        )
 
-        if query and len(unmapped) == 50:
-            ctk.CTkLabel(self.mapping_scroll,
-                         text="Showing first 50 matches — refine your search to narrow results.",
-                         font=ctk.CTkFont(size=11), text_color="gray50").pack(pady=6)
+        if not visible:
+            ctk.CTkLabel(
+                self.mapping_scroll,
+                text="No products match your filters.",
+                font=ctk.CTkFont(size=12), text_color="gray50",
+            ).pack(pady=48)
+        else:
+            for title in visible:
+                self._add_mapping_row(title)
 
+        # pagination controls
+        self._page_label.configure(text=f"Page {page + 1} of {n_pages}")
+        self._prev_btn.configure(state="normal" if page > 0 else "disabled")
+        self._next_btn.configure(state="normal" if page < n_pages - 1 else "disabled")
+
+    # ── row builder ────────────────────────────────────────────────────────
     def _add_mapping_row(self, product_name):
         current_file = self._mappings.get(product_name, "")
         is_mapped    = bool(current_file)
@@ -402,8 +455,8 @@ class DTFApp:
         inner.pack(fill="x", padx=12, pady=8)
 
         ctk.CTkLabel(inner, text=product_name,
-                     font=ctk.CTkFont(size=12),
-                     anchor="w").pack(side="left", expand=True, fill="x")
+                     font=ctk.CTkFont(size=12), anchor="w",
+                     ).pack(side="left", expand=True, fill="x")
 
         file_var = tk.StringVar(value=current_file if is_mapped else "Not mapped")
         file_lbl = ctk.CTkLabel(
@@ -437,6 +490,8 @@ class DTFApp:
                 self._mappings[product_name] = filename
                 file_var.set(filename)
                 file_lbl.configure(text_color=("gray10", "gray90"))
+                # refresh status count without changing page
+                self._render_page()
         return cmd
 
     def _save_mappings(self):
