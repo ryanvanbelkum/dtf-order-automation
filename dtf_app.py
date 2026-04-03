@@ -837,23 +837,13 @@ def _write_jhdr(path, width_in, height_in):
         f.write(xml)
 
 
-def _ssl_context():
-    """Return a cached SSL context using certifi's trusted certs (fixes Windows SSL issues)."""
-    if not hasattr(_ssl_context, "_ctx"):
-        import ssl
-        import certifi
-        _ssl_context._ctx = ssl.create_default_context(cafile=certifi.where())
-    return _ssl_context._ctx
-
-
 def get_shopify_token(config):
     """
     Obtain an access token via the client credentials grant.
     Returns a cached token if still valid, otherwise requests a new one
-    and saves it to config. Token is valid for 24 hours; we refresh at 23.
+    and saves it to config. Token is valid for 24 hours; we refresh at 23h 59m.
     """
-    import urllib.request
-    import urllib.error
+    import requests as req_lib
 
     store         = config.get("shopify_store_url", "").strip().rstrip("/")
     client_id     = config.get("shopify_client_id", "").strip()
@@ -873,56 +863,53 @@ def get_shopify_token(config):
             pass
 
     # request a new token — body must be form-encoded per Shopify spec
-    import urllib.parse
-    url  = f"https://{store}/admin/oauth/access_token"
-    body = urllib.parse.urlencode({
-        "grant_type":    "client_credentials",
-        "client_id":     client_id,
-        "client_secret": client_secret,
-    }).encode()
-    req = urllib.request.Request(url, data=body,
-                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
+    url = f"https://{store}/admin/oauth/access_token"
     try:
-        with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
-            data       = json.loads(resp.read())
-            token      = data.get("access_token")
-            expires_in = data.get("expires_in", 86399)
-            if token:
-                config["shopify_token"]        = token
-                # subtract 60s buffer so we never use an about-to-expire token
-                config["shopify_token_expiry"] = (
-                    datetime.now() + timedelta(seconds=expires_in - 60)
-                ).isoformat()
-                save_config(config)
-            return token
-    except urllib.error.HTTPError as e:
-        raise RuntimeError(f"HTTP {e.code} from Shopify token endpoint: {e.read().decode()}")
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Network error reaching Shopify: {e.reason}")
-    except Exception as e:
-        raise RuntimeError(f"Unexpected error: {e}")
+        resp = req_lib.post(url, data={
+            "grant_type":    "client_credentials",
+            "client_id":     client_id,
+            "client_secret": client_secret,
+        }, timeout=30)
+        resp.raise_for_status()
+        data       = resp.json()
+        token      = data.get("access_token")
+        expires_in = data.get("expires_in", 86399)
+        if token:
+            config["shopify_token"]        = token
+            config["shopify_token_expiry"] = (
+                datetime.now() + timedelta(seconds=expires_in - 60)
+            ).isoformat()
+            save_config(config)
+        return token
+    except req_lib.exceptions.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.response.status_code} from Shopify: {e.response.text}")
+    except req_lib.exceptions.RequestException as e:
+        raise RuntimeError(f"Network error: {e}")
 
 
 def fetch_shopify_orders(config):
-    import urllib.request
+    import requests as req_lib
     store = config.get("shopify_store_url", "").strip().rstrip("/")
     if not store:
         return []
     token = get_shopify_token(config)
     if not token:
         return None
-    url = f"https://{store}/admin/api/2024-01/orders.json?status=open&fulfillment_status=unfulfilled&limit=250"
-    req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
-            return json.loads(resp.read()).get("orders", [])
+        resp = req_lib.get(
+            f"https://{store}/admin/api/2024-01/orders.json",
+            params={"status": "open", "fulfillment_status": "unfulfilled", "limit": 250},
+            headers={"X-Shopify-Access-Token": token},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json().get("orders", [])
     except Exception:
         return None
 
 
 def fetch_shopify_products(config, token=None):
-    import urllib.request
-    import urllib.error
+    import requests as req_lib
     store = config.get("shopify_store_url", "").strip().rstrip("/")
     if not store:
         return [], "✗ Store URL not set in Settings"
@@ -932,21 +919,24 @@ def fetch_shopify_products(config, token=None):
         return None, "✗ Could not get Shopify token"
 
     products = []
-    url = f"https://{store}/admin/api/2024-01/products.json?limit=250&fields=id,title"
+    url = f"https://{store}/admin/api/2024-01/products.json"
+    params = {"limit": 250, "fields": "id,title"}
     while url:
-        req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=30, context=_ssl_context()) as resp:
-                products.extend(json.loads(resp.read()).get("products", []))
-                link = resp.headers.get("Link", "")
-                url  = None
-                if 'rel="next"' in link:
-                    for part in link.split(","):
-                        if 'rel="next"' in part:
-                            url = part.split(";")[0].strip().strip("<>")
-                            break
-        except urllib.error.HTTPError as e:
-            return None, f"✗ HTTP {e.code} fetching products: {e.read().decode()}"
+            resp = req_lib.get(url, params=params, headers={"X-Shopify-Access-Token": token}, timeout=30)
+            resp.raise_for_status()
+            products.extend(resp.json().get("products", []))
+            # pagination — only send params on first request
+            params = {}
+            link = resp.headers.get("Link", "")
+            url  = None
+            if 'rel="next"' in link:
+                for part in link.split(","):
+                    if 'rel="next"' in part:
+                        url = part.split(";")[0].strip().strip("<>")
+                        break
+        except req_lib.exceptions.HTTPError as e:
+            return None, f"✗ HTTP {e.response.status_code} fetching products: {e.response.text}"
         except Exception as e:
             return None, f"✗ Error fetching products: {e}"
     return products, None
