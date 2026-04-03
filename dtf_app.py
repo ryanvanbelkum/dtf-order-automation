@@ -837,6 +837,13 @@ def _write_jhdr(path, width_in, height_in):
         f.write(xml)
 
 
+def _ssl_context():
+    """Return an SSL context using certifi's trusted certs (fixes Windows SSL issues)."""
+    import ssl
+    import certifi
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 def get_shopify_token(config):
     """
     Obtain an access token via the client credentials grant.
@@ -874,7 +881,7 @@ def get_shopify_token(config):
     req = urllib.request.Request(url, data=body,
                                  headers={"Content-Type": "application/x-www-form-urlencoded"})
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=8, context=_ssl_context()) as resp:
             data       = json.loads(resp.read())
             token      = data.get("access_token")
             expires_in = data.get("expires_in", 86399)
@@ -905,7 +912,7 @@ def fetch_shopify_orders(config):
     url = f"https://{store}/admin/api/2024-01/orders.json?status=open&fulfillment_status=unfulfilled&limit=250"
     req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=8, context=_ssl_context()) as resp:
             return json.loads(resp.read()).get("orders", [])
     except Exception:
         return None
@@ -927,7 +934,7 @@ def fetch_shopify_products(config, token=None):
     while url:
         req = urllib.request.Request(url, headers={"X-Shopify-Access-Token": token, "Content-Type": "application/json"})
         try:
-            with urllib.request.urlopen(req, timeout=8) as resp:
+            with urllib.request.urlopen(req, timeout=8, context=_ssl_context()) as resp:
                 products.extend(json.loads(resp.read()).get("products", []))
                 link = resp.headers.get("Link", "")
                 url  = None
