@@ -234,6 +234,7 @@ class DTFApp:
     # ── Mapping tab ────────────────────────────────────────────────────────
     def _tab_mapping(self):
         tab = self.tabview.tab("Mapping")
+        self._all_products = []   # full list from Shopify
 
         # top bar
         top = ctk.CTkFrame(tab, fg_color="transparent")
@@ -252,6 +253,18 @@ class DTFApp:
 
         ctk.CTkButton(top, text="Save Mappings", width=130,
                       command=self._save_mappings).pack(side="right")
+
+        # search bar (disabled until products load)
+        search_bar = ctk.CTkFrame(tab, fg_color="transparent")
+        search_bar.pack(fill="x", padx=8, pady=(6, 0))
+        ctk.CTkLabel(search_bar, text="Search:", font=ctk.CTkFont(size=12),
+                     text_color="gray55").pack(side="left", padx=(8, 6))
+        self._search_var = tk.StringVar()
+        self._search_var.trace_add("write", lambda *_: self._apply_search())
+        self._search_entry = ctk.CTkEntry(search_bar, textvariable=self._search_var,
+                                          placeholder_text="Sync products first…", width=320,
+                                          state="disabled")
+        self._search_entry.pack(side="left")
 
         # divider
         ctk.CTkFrame(tab, height=1, fg_color=("gray75", "gray30")).pack(
@@ -324,15 +337,58 @@ class DTFApp:
             self.sync_status_var.set("No products found")
             return
 
-        self.sync_status_var.set(f"{len(products)} product(s) loaded")
+        self._all_products = [p["title"] for p in products]
+        n = len(self._all_products)
+        mapped_count = sum(1 for t in self._all_products if t in self._mappings)
+        self.sync_status_var.set(f"{n} products — {mapped_count} mapped")
+        self._search_entry.configure(state="normal", placeholder_text="Type to filter products…")
+        self._search_var.set("")
+        self._apply_search()
 
-        # rebuild list
+    def _apply_search(self):
+        """Rebuild the visible rows based on the current search query.
+
+        Always shows already-mapped products first (up to 200).
+        When the user types, shows the first 50 matching unmapped products.
+        Never renders more than 250 rows total so the UI stays responsive.
+        """
+        if not self._all_products:
+            return
+
+        query = self._search_var.get().strip().lower()
+
+        # split into mapped vs unmapped
+        mapped   = [t for t in self._all_products if t in self._mappings]
+        unmapped = [t for t in self._all_products if t not in self._mappings]
+
+        # filter unmapped by search query (show all mapped regardless)
+        if query:
+            unmapped = [t for t in unmapped if query in t.lower()][:50]
+        else:
+            unmapped = []   # no search → only show mapped products
+
+        to_render = mapped + unmapped
+
+        # destroy old widgets
         for w in self.mapping_scroll.winfo_children():
             w.destroy()
         self._mapping_rows = {}
 
-        for product in products:
-            self._add_mapping_row(product["title"])
+        if not to_render:
+            msg = ("No products mapped yet. Search above to find a product and assign a design file."
+                   if not query else f'No products match "{query}".')
+            ctk.CTkLabel(self.mapping_scroll, text=msg,
+                         font=ctk.CTkFont(size=12), text_color="gray50",
+                         wraplength=500).pack(pady=48)
+            return
+
+        for title in to_render:
+            self._add_mapping_row(title)
+
+        if query and len(unmapped) == 50:
+            ctk.CTkLabel(self.mapping_scroll,
+                         text="Showing first 50 matches — refine your search to narrow results.",
+                         font=ctk.CTkFont(size=11), text_color="gray50").pack(pady=6)
 
     def _add_mapping_row(self, product_name):
         current_file = self._mappings.get(product_name, "")
