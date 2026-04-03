@@ -850,14 +850,31 @@ def _write_jhdr(path, width_in, height_in):
         f.write(xml)
 
 
+def _http_session():
+    """
+    Return a module-level requests Session configured for reliable operation
+    inside a PyInstaller bundle on Windows:
+      - trust_env=False  → disables Windows proxy auto-detection (WPAD),
+                           which can hang for ~60 s in Parallels / VMs
+      - verify=certifi   → explicit CA bundle so SSL works without the
+                           Windows cert store
+    """
+    if not hasattr(_http_session, "_s"):
+        import requests as req_lib
+        import certifi
+        s = req_lib.Session()
+        s.trust_env = False          # no WPAD / registry proxy lookup
+        s.verify    = certifi.where()
+        _http_session._s = s
+    return _http_session._s
+
+
 def get_shopify_token(config):
     """
     Obtain an access token via the client credentials grant.
     Returns a cached token if still valid, otherwise requests a new one
     and saves it to config. Token is valid for 24 hours; we refresh at 23h 59m.
     """
-    import requests as req_lib
-
     store         = config.get("shopify_store_url", "").strip().rstrip("/")
     client_id     = config.get("shopify_client_id", "").strip()
     client_secret = config.get("shopify_client_secret", "").strip()
@@ -876,13 +893,14 @@ def get_shopify_token(config):
             pass
 
     # request a new token — body must be form-encoded per Shopify spec
+    import requests as req_lib
     url = f"https://{store}/admin/oauth/access_token"
     try:
-        resp = req_lib.post(url, data={
+        resp = _http_session().post(url, data={
             "grant_type":    "client_credentials",
             "client_id":     client_id,
             "client_secret": client_secret,
-        }, timeout=30)
+        }, timeout=15)
         resp.raise_for_status()
         data       = resp.json()
         token      = data.get("access_token")
@@ -909,11 +927,11 @@ def fetch_shopify_orders(config):
     if not token:
         return None
     try:
-        resp = req_lib.get(
+        resp = _http_session().get(
             f"https://{store}/admin/api/2024-01/orders.json",
             params={"status": "open", "fulfillment_status": "unfulfilled", "limit": 250},
             headers={"X-Shopify-Access-Token": token},
-            timeout=30,
+            timeout=15,
         )
         resp.raise_for_status()
         return resp.json().get("orders", [])
@@ -936,7 +954,11 @@ def fetch_shopify_products(config, token=None):
     params = {"limit": 250, "fields": "id,title"}
     while url:
         try:
-            resp = req_lib.get(url, params=params, headers={"X-Shopify-Access-Token": token}, timeout=30)
+            resp = _http_session().get(
+                url, params=params,
+                headers={"X-Shopify-Access-Token": token},
+                timeout=15,
+            )
             resp.raise_for_status()
             products.extend(resp.json().get("products", []))
             # pagination — only send params on first request
