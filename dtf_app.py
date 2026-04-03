@@ -235,19 +235,22 @@ class DTFApp:
     _PAGE_SIZE = 50
 
     def _tab_mapping(self):
-        tab = self.tabview.tab("Mapping")
         self._all_products  = []
         self._filtered      = []
         self._page          = 0
         self._unmapped_only = tk.BooleanVar(value=False)
 
-        # Use grid so row 3 (scroll frame) can be given weight=1 to fill
-        # all remaining vertical space precisely.
-        tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure(3, weight=1)   # scroll row expands
+        # CTk tab frames don't propagate grid weights, so pack a wrapper
+        # frame that fills the tab, then grid inside it.
+        tab_raw = self.tabview.tab("Mapping")
+        wrap = ctk.CTkFrame(tab_raw, fg_color="transparent")
+        wrap.pack(fill="both", expand=True)
+
+        wrap.grid_columnconfigure(0, weight=1)
+        wrap.grid_rowconfigure(3, weight=1)   # scroll row expands
 
         # ── row 0: top bar ─────────────────────────────────────────────────
-        top = ctk.CTkFrame(tab, fg_color="transparent")
+        top = ctk.CTkFrame(wrap, fg_color="transparent")
         top.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 0))
 
         self.sync_btn = ctk.CTkButton(
@@ -265,7 +268,7 @@ class DTFApp:
                       command=self._save_mappings).pack(side="right")
 
         # ── row 1: filter bar ──────────────────────────────────────────────
-        fbar = ctk.CTkFrame(tab, fg_color="transparent")
+        fbar = ctk.CTkFrame(wrap, fg_color="transparent")
         fbar.grid(row=1, column=0, sticky="ew", padx=8, pady=(6, 0))
 
         ctk.CTkLabel(fbar, text="Search:", font=ctk.CTkFont(size=12),
@@ -288,7 +291,7 @@ class DTFApp:
         self._unmapped_chk.pack(side="left", padx=16)
 
         # ── row 2: divider + column headers ───────────────────────────────
-        hdr_outer = ctk.CTkFrame(tab, fg_color="transparent")
+        hdr_outer = ctk.CTkFrame(wrap, fg_color="transparent")
         hdr_outer.grid(row=2, column=0, sticky="ew", padx=8, pady=(8, 2))
         ctk.CTkFrame(hdr_outer, height=1, fg_color=("gray75", "gray30")).pack(fill="x")
         hdr = ctk.CTkFrame(hdr_outer, fg_color="transparent")
@@ -300,7 +303,7 @@ class DTFApp:
         ctk.CTkFrame(hdr, width=90, fg_color="transparent").pack(side="left")
 
         # ── row 3: scrollable rows (expands to fill) ───────────────────────
-        self.mapping_scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        self.mapping_scroll = ctk.CTkScrollableFrame(wrap, fg_color="transparent")
         self.mapping_scroll.grid(row=3, column=0, sticky="nsew", padx=8, pady=(0, 0))
 
         ctk.CTkLabel(
@@ -310,7 +313,7 @@ class DTFApp:
         ).pack(pady=48)
 
         # ── row 4: pagination bar ──────────────────────────────────────────
-        pbar = ctk.CTkFrame(tab, fg_color="transparent")
+        pbar = ctk.CTkFrame(wrap, fg_color="transparent")
         pbar.grid(row=4, column=0, sticky="ew", padx=8, pady=(4, 8))
 
         self._prev_btn = ctk.CTkButton(
