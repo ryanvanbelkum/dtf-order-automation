@@ -850,22 +850,27 @@ def get_shopify_token(config):
         except ValueError:
             pass
 
-    # request a new token
+    # request a new token — body must be form-encoded per Shopify spec
+    import urllib.parse
     url  = f"https://{store}/admin/oauth/access_token"
-    body = json.dumps({
+    body = urllib.parse.urlencode({
         "grant_type":    "client_credentials",
         "client_id":     client_id,
         "client_secret": client_secret,
     }).encode()
     req = urllib.request.Request(url, data=body,
-                                 headers={"Content-Type": "application/json"})
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
     try:
         with urllib.request.urlopen(req, timeout=8) as resp:
-            data  = json.loads(resp.read())
-            token = data.get("access_token")
+            data       = json.loads(resp.read())
+            token      = data.get("access_token")
+            expires_in = data.get("expires_in", 86399)
             if token:
                 config["shopify_token"]        = token
-                config["shopify_token_expiry"] = (datetime.now() + timedelta(hours=23)).isoformat()
+                # subtract 60s buffer so we never use an about-to-expire token
+                config["shopify_token_expiry"] = (
+                    datetime.now() + timedelta(seconds=expires_in - 60)
+                ).isoformat()
                 save_config(config)
             return token
     except Exception:
