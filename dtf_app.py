@@ -1,17 +1,16 @@
 import os
 import sys
 
+# ── import requests early so it's cached before any background thread uses it
+import certifi
+import requests as _requests_lib
+
 # ── PyInstaller SSL fix ────────────────────────────────────────────────────
-# When bundled with --onefile, requests can't find certifi's CA bundle via
-# the normal path. Force it explicitly before any network code runs.
-if getattr(sys, "frozen", False):
-    try:
-        import certifi
-        _ca = certifi.where()
-        os.environ.setdefault("REQUESTS_CA_BUNDLE", _ca)
-        os.environ.setdefault("SSL_CERT_FILE", _ca)
-    except Exception:
-        pass
+# Force explicit CA bundle path so requests never touches the Windows cert
+# store or WPAD proxy discovery.
+_CA_BUNDLE = certifi.where()
+os.environ["REQUESTS_CA_BUNDLE"] = _CA_BUNDLE
+os.environ["SSL_CERT_FILE"]      = _CA_BUNDLE
 
 import customtkinter as ctk
 import tkinter as tk
@@ -287,8 +286,13 @@ class DTFApp:
         threading.Thread(target=self._do_sync_products, daemon=True).start()
 
     def _do_sync_products(self):
-        # Step 1: get token — surface a specific error if this fails
+        def status(msg):
+            self.root.after(0, self.sync_status_var.set, msg)
+
+        # Step 1: get token
+        status("Step 1/3: building HTTP session…")
         try:
+            status("Step 2/3: requesting Shopify token…")
             token = get_shopify_token(self.config)
         except RuntimeError as e:
             self.root.after(0, self._on_products_synced, None, f"✗ Auth failed: {e}")
@@ -299,6 +303,7 @@ class DTFApp:
             return
 
         # Step 2: fetch products
+        status("Step 3/3: fetching products from Shopify…")
         products, error = fetch_shopify_products(self.config, token)
         self.root.after(0, self._on_products_synced, products, error)
 
@@ -852,19 +857,14 @@ def _write_jhdr(path, width_in, height_in):
 
 def _http_session():
     """
-    Return a module-level requests Session configured for reliable operation
-    inside a PyInstaller bundle on Windows:
-      - trust_env=False  → disables Windows proxy auto-detection (WPAD),
-                           which can hang for ~60 s in Parallels / VMs
-      - verify=certifi   → explicit CA bundle so SSL works without the
-                           Windows cert store
+    Shared requests Session — proxy detection disabled, explicit CA bundle.
+    trust_env=False skips WPAD / Windows registry proxy lookup (which hangs
+    ~60 s in VMs). verify uses the certifi bundle imported at module start.
     """
     if not hasattr(_http_session, "_s"):
-        import requests as req_lib
-        import certifi
-        s = req_lib.Session()
-        s.trust_env = False          # no WPAD / registry proxy lookup
-        s.verify    = certifi.where()
+        s = _requests_lib.Session()
+        s.trust_env = False
+        s.verify    = _CA_BUNDLE
         _http_session._s = s
     return _http_session._s
 
@@ -893,7 +893,6 @@ def get_shopify_token(config):
             pass
 
     # request a new token — body must be form-encoded per Shopify spec
-    import requests as req_lib
     url = f"https://{store}/admin/oauth/access_token"
     try:
         resp = _http_session().post(url, data={
@@ -912,14 +911,13 @@ def get_shopify_token(config):
             ).isoformat()
             save_config(config)
         return token
-    except req_lib.exceptions.HTTPError as e:
+    except _requests_lib.exceptions.HTTPError as e:
         raise RuntimeError(f"HTTP {e.response.status_code} from Shopify: {e.response.text}")
-    except req_lib.exceptions.RequestException as e:
+    except _requests_lib.exceptions.RequestException as e:
         raise RuntimeError(f"Network error: {e}")
 
 
 def fetch_shopify_orders(config):
-    import requests as req_lib
     store = config.get("shopify_store_url", "").strip().rstrip("/")
     if not store:
         return []
@@ -940,7 +938,6 @@ def fetch_shopify_orders(config):
 
 
 def fetch_shopify_products(config, token=None):
-    import requests as req_lib
     store = config.get("shopify_store_url", "").strip().rstrip("/")
     if not store:
         return [], "✗ Store URL not set in Settings"
@@ -970,7 +967,7 @@ def fetch_shopify_products(config, token=None):
                     if 'rel="next"' in part:
                         url = part.split(";")[0].strip().strip("<>")
                         break
-        except req_lib.exceptions.HTTPError as e:
+        except _requests_lib.exceptions.HTTPError as e:
             return None, f"✗ HTTP {e.response.status_code} fetching products: {e.response.text}"
         except Exception as e:
             return None, f"✗ Error fetching products: {e}"
