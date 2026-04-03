@@ -241,32 +241,14 @@ class DTFApp:
         self._page          = 0
         self._unmapped_only = tk.BooleanVar(value=False)
 
-        # Pack order matters: bottom widgets first, then top-to-bottom for
-        # everything else, expanding scroll frame last.
+        # Use grid so row 3 (scroll frame) can be given weight=1 to fill
+        # all remaining vertical space precisely.
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(3, weight=1)   # scroll row expands
 
-        # ── pagination bar — pack FIRST so it anchors the bottom ──────────
-        pbar = ctk.CTkFrame(tab, fg_color="transparent")
-        pbar.pack(side="bottom", fill="x", padx=8, pady=(4, 8))
-
-        self._prev_btn = ctk.CTkButton(
-            pbar, text="← Prev", width=90, state="disabled",
-            command=self._page_prev,
-        )
-        self._prev_btn.pack(side="left")
-
-        self._page_label = ctk.CTkLabel(pbar, text="", font=ctk.CTkFont(size=12),
-                                        text_color="gray55")
-        self._page_label.pack(side="left", expand=True)
-
-        self._next_btn = ctk.CTkButton(
-            pbar, text="Next →", width=90, state="disabled",
-            command=self._page_next,
-        )
-        self._next_btn.pack(side="right")
-
-        # ── top bar ────────────────────────────────────────────────────────
+        # ── row 0: top bar ─────────────────────────────────────────────────
         top = ctk.CTkFrame(tab, fg_color="transparent")
-        top.pack(side="top", fill="x", padx=8, pady=(8, 0))
+        top.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 0))
 
         self.sync_btn = ctk.CTkButton(
             top, text="↻  Sync Products from Shopify", width=230,
@@ -282,9 +264,9 @@ class DTFApp:
         ctk.CTkButton(top, text="Save Mappings", width=130,
                       command=self._save_mappings).pack(side="right")
 
-        # ── filter bar ────────────────────────────────────────────────────
+        # ── row 1: filter bar ──────────────────────────────────────────────
         fbar = ctk.CTkFrame(tab, fg_color="transparent")
-        fbar.pack(side="top", fill="x", padx=8, pady=(6, 0))
+        fbar.grid(row=1, column=0, sticky="ew", padx=8, pady=(6, 0))
 
         ctk.CTkLabel(fbar, text="Search:", font=ctk.CTkFont(size=12),
                      text_color="gray55").pack(side="left", padx=(8, 6))
@@ -305,26 +287,47 @@ class DTFApp:
         )
         self._unmapped_chk.pack(side="left", padx=16)
 
-        # ── column headers ────────────────────────────────────────────────
-        ctk.CTkFrame(tab, height=1, fg_color=("gray75", "gray30")).pack(
-            side="top", fill="x", padx=8, pady=(8, 0))
-        hdr = ctk.CTkFrame(tab, fg_color="transparent")
-        hdr.pack(side="top", fill="x", padx=16, pady=(4, 2))
+        # ── row 2: divider + column headers ───────────────────────────────
+        hdr_outer = ctk.CTkFrame(tab, fg_color="transparent")
+        hdr_outer.grid(row=2, column=0, sticky="ew", padx=8, pady=(8, 2))
+        ctk.CTkFrame(hdr_outer, height=1, fg_color=("gray75", "gray30")).pack(fill="x")
+        hdr = ctk.CTkFrame(hdr_outer, fg_color="transparent")
+        hdr.pack(fill="x", padx=8, pady=(4, 0))
         ctk.CTkLabel(hdr, text="PRODUCT", font=ctk.CTkFont(size=9, weight="bold"),
                      text_color="gray50", anchor="w").pack(side="left", expand=True, fill="x")
         ctk.CTkLabel(hdr, text="DESIGN FILE", font=ctk.CTkFont(size=9, weight="bold"),
                      text_color="gray50", width=200, anchor="w").pack(side="left")
         ctk.CTkFrame(hdr, width=90, fg_color="transparent").pack(side="left")
 
-        # ── scrollable rows — fills all remaining space ───────────────────
+        # ── row 3: scrollable rows (expands to fill) ───────────────────────
         self.mapping_scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
-        self.mapping_scroll.pack(side="top", fill="both", expand=True, padx=8, pady=(2, 0))
+        self.mapping_scroll.grid(row=3, column=0, sticky="nsew", padx=8, pady=(0, 0))
 
         ctk.CTkLabel(
             self.mapping_scroll,
             text='Click "Sync Products from Shopify" to load your product list.',
             font=ctk.CTkFont(size=12), text_color="gray50",
         ).pack(pady=48)
+
+        # ── row 4: pagination bar ──────────────────────────────────────────
+        pbar = ctk.CTkFrame(tab, fg_color="transparent")
+        pbar.grid(row=4, column=0, sticky="ew", padx=8, pady=(4, 8))
+
+        self._prev_btn = ctk.CTkButton(
+            pbar, text="← Prev", width=90, state="disabled",
+            command=self._page_prev,
+        )
+        self._prev_btn.pack(side="left")
+
+        self._page_label = ctk.CTkLabel(pbar, text="", font=ctk.CTkFont(size=12),
+                                        text_color="gray55")
+        self._page_label.pack(side="left", expand=True)
+
+        self._next_btn = ctk.CTkButton(
+            pbar, text="Next →", width=90, state="disabled",
+            command=self._page_next,
+        )
+        self._next_btn.pack(side="right")
 
     # ── sync ───────────────────────────────────────────────────────────────
     def _sync_products(self):
