@@ -1,5 +1,12 @@
 import os
 import sys
+import socket
+
+# ── Hard socket timeout ────────────────────────────────────────────────────
+# requests' timeout= only covers I/O after the connection is established.
+# setdefaulttimeout covers DNS + TCP connect at the OS level, preventing
+# infinite hangs when the connection phase itself stalls.
+socket.setdefaulttimeout(20)
 
 # ── import requests early so it's cached before any background thread uses it
 import certifi
@@ -289,10 +296,11 @@ class DTFApp:
         def status(msg):
             self.root.after(0, self.sync_status_var.set, msg)
 
-        # Step 1: get token
         status("Step 1/3: building HTTP session…")
         try:
-            status("Step 2/3: requesting Shopify token…")
+            # check if we have a cached token so we know if step 2 hits the network
+            cached = bool(self.config.get("shopify_token") and self.config.get("shopify_token_expiry"))
+            status(f"Step 2/3: {'using cached token' if cached else 'requesting Shopify token (network)'}…")
             token = get_shopify_token(self.config)
         except RuntimeError as e:
             self.root.after(0, self._on_products_synced, None, f"✗ Auth failed: {e}")
@@ -302,8 +310,7 @@ class DTFApp:
                             "✗ No token returned — check Client ID, Secret, and Store URL in Settings")
             return
 
-        # Step 2: fetch products
-        status("Step 3/3: fetching products from Shopify…")
+        status("Step 3/3: fetching products from Shopify (network)…")
         products, error = fetch_shopify_products(self.config, token)
         self.root.after(0, self._on_products_synced, products, error)
 
