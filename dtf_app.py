@@ -274,14 +274,26 @@ class DTFApp:
         threading.Thread(target=self._do_sync_products, daemon=True).start()
 
     def _do_sync_products(self):
-        products = fetch_shopify_products(self.config)
-        self.root.after(0, self._on_products_synced, products)
+        # Step 1: get token — surface a specific error if this fails
+        try:
+            token = get_shopify_token(self.config)
+        except RuntimeError as e:
+            self.root.after(0, self._on_products_synced, None, f"✗ Auth failed: {e}")
+            return
+        if not token:
+            self.root.after(0, self._on_products_synced, None,
+                            "✗ No token returned — check Client ID, Secret, and Store URL in Settings")
+            return
 
-    def _on_products_synced(self, products):
+        # Step 2: fetch products
+        products, error = fetch_shopify_products(self.config, token)
+        self.root.after(0, self._on_products_synced, products, error)
+
+    def _on_products_synced(self, products, error=None):
         self.sync_btn.configure(state="normal", text="↻  Sync Products from Shopify")
 
         if products is None:
-            self.sync_status_var.set("✗ Could not connect to Shopify")
+            self.sync_status_var.set(error or "✗ Could not connect to Shopify")
             return
         if not products:
             self.sync_status_var.set("No products found")
@@ -832,6 +844,7 @@ def get_shopify_token(config):
     and saves it to config. Token is valid for 24 hours; we refresh at 23.
     """
     import urllib.request
+    import urllib.error
 
     store         = config.get("shopify_store_url", "").strip().rstrip("/")
     client_id     = config.get("shopify_client_id", "").strip()
@@ -873,8 +886,12 @@ def get_shopify_token(config):
                 ).isoformat()
                 save_config(config)
             return token
-    except Exception:
-        return None
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.code} from Shopify token endpoint: {e.read().decode()}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Network error reaching Shopify: {e.reason}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error: {e}")
 
 
 def fetch_shopify_orders(config):
@@ -894,14 +911,16 @@ def fetch_shopify_orders(config):
         return None
 
 
-def fetch_shopify_products(config):
+def fetch_shopify_products(config, token=None):
     import urllib.request
+    import urllib.error
     store = config.get("shopify_store_url", "").strip().rstrip("/")
     if not store:
-        return []
-    token = get_shopify_token(config)
+        return [], "✗ Store URL not set in Settings"
     if not token:
-        return None
+        token = get_shopify_token(config)
+    if not token:
+        return None, "✗ Could not get Shopify token"
 
     products = []
     url = f"https://{store}/admin/api/2024-01/products.json?limit=250&fields=id,title"
@@ -917,9 +936,11 @@ def fetch_shopify_products(config):
                         if 'rel="next"' in part:
                             url = part.split(";")[0].strip().strip("<>")
                             break
-        except Exception:
-            return None
-    return products
+        except urllib.error.HTTPError as e:
+            return None, f"✗ HTTP {e.code} fetching products: {e.read().decode()}"
+        except Exception as e:
+            return None, f"✗ Error fetching products: {e}"
+    return products, None
 
 
 # ── entry point ────────────────────────────────────────────────────────────
