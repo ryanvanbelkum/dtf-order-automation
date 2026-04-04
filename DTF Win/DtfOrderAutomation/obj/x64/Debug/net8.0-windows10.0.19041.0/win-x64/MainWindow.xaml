@@ -1,0 +1,53 @@
+﻿<Window
+    x:Class="DtfOrderAutomation.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="DTF Order Automation">
+
+    <Grid>
+        <NavigationView x:ConnectionId='2' x:Name="NavView"
+                        PaneDisplayMode="Left"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="False"
+                        OpenPaneLength="200"
+                                                                   >
+
+            <NavigationView.PaneHeader>
+                <StackPanel Margin="16,12,16,4" Spacing="2">
+                    <TextBlock Text="DTF Order Automation"
+                               FontSize="13" FontWeight="SemiBold"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:ConnectionId='3' x:Name="StatusBadge"
+                               Text="● Idle"
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                </StackPanel>
+            </NavigationView.PaneHeader>
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Tag="DashboardPage" Content="Dashboard">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE80F;"/></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Tag="MappingPage" Content="Mapping">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE8F1;"/></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Tag="LastRunPage" Content="Last Run">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE9F5;"/></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Tag="HistoryPage" Content="History">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE81C;"/></NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem Tag="SettingsPage" Content="Settings">
+                    <NavigationViewItem.Icon><FontIcon Glyph="&#xE713;"/></NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.FooterMenuItems>
+
+            <Frame x:ConnectionId='4' x:Name="ContentFrame"/>
+
+        </NavigationView>
+    </Grid>
+</Window>
+

@@ -1,0 +1,74 @@
+<Page
+    x:Class="DtfOrderAutomation.Pages.HistoryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:DtfOrderAutomation.Pages">
+
+    <Grid RowDefinitions="Auto,*" Padding="12,8">
+
+        <!-- Column headers -->
+        <Grid Grid.Row="0"
+              ColumnDefinitions="*,140,100,120"
+              Padding="12,0,12,4">
+            <TextBlock Grid.Column="0" Text="DATE &amp; TIME"
+                       FontSize="10" FontWeight="SemiBold"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                       CharacterSpacing="50"/>
+            <TextBlock Grid.Column="1" Text="ORDERS" TextAlignment="Center"
+                       FontSize="10" FontWeight="SemiBold"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                       CharacterSpacing="50"/>
+            <TextBlock Grid.Column="2" Text="SKIPPED" TextAlignment="Center"
+                       FontSize="10" FontWeight="SemiBold"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                       CharacterSpacing="50"/>
+            <TextBlock Grid.Column="3" Text="STATUS" TextAlignment="Center"
+                       FontSize="10" FontWeight="SemiBold"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                       CharacterSpacing="50"/>
+        </Grid>
+
+        <!-- History list -->
+        <ListView Grid.Row="1"
+                  x:Name="HistoryList"
+                  ItemsSource="{x:Bind HistoryItems}"
+                  SelectionMode="None"
+                  IsItemClickEnabled="False">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="local:HistoryItem">
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="6"
+                            Padding="12,10" Margin="0,2">
+                        <Grid ColumnDefinitions="*,140,100,120">
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Bind DateDisplay}"
+                                       FontSize="12" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Bind OrdersProcessed}"
+                                       FontSize="12" TextAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="{x:Bind Skipped}"
+                                       FontSize="12" TextAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="3"
+                                       Text="{x:Bind StatusDisplay}"
+                                       FontSize="12" TextAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="{x:Bind StatusColor}"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+    </Grid>
+</Page>

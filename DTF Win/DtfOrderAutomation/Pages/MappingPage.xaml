@@ -1,0 +1,97 @@
+<Page
+    x:Class="DtfOrderAutomation.Pages.MappingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:DtfOrderAutomation.Pages">
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Padding="12,8,12,8">
+
+        <!-- ── Row 0: top toolbar ──────────────────────────────────────── -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
+                <Button x:Name="SyncBtn"
+                        Content="↻  Sync Products from Shopify"
+                        Click="SyncBtn_Click"/>
+                <TextBlock x:Name="SyncStatus"
+                           FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Content="Save Mappings"
+                    Click="SaveBtn_Click"/>
+        </Grid>
+
+        <!-- ── Row 1: search + filter ─────────────────────────────────── -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="16" Margin="0,0,0,8">
+            <TextBox x:Name="SearchBox"
+                     PlaceholderText="Sync products first…"
+                     Width="280"
+                     IsEnabled="False"
+                     TextChanged="SearchBox_TextChanged"/>
+            <CheckBox x:Name="UnmappedOnlyCheck"
+                      Content="Unmapped only"
+                      IsEnabled="False"
+                      Click="UnmappedOnlyCheck_Click"/>
+        </StackPanel>
+
+        <!-- ── Row 2: column headers ───────────────────────────────────── -->
+        <Grid Grid.Row="2"
+              ColumnDefinitions="*,220,96"
+              Padding="12,0,12,4"
+              Margin="0,0,0,2">
+            <TextBlock Grid.Column="0" Text="PRODUCT"
+                       FontSize="10" FontWeight="SemiBold"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                       CharacterSpacing="50"/>
+            <TextBlock Grid.Column="1" Text="DESIGN FILE"
+                       FontSize="10" FontWeight="SemiBold"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                       CharacterSpacing="50"/>
+        </Grid>
+
+        <!-- ── Row 3: virtualized product list ────────────────────────── -->
+        <ListView Grid.Row="3"
+                  x:Name="ProductList"
+                  ItemsSource="{x:Bind DisplayedItems}"
+                  SelectionMode="None"
+                  IsItemClickEnabled="False">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="local:MappingItem">
+                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="6"
+                            Padding="12,8" Margin="0,2">
+                        <Grid ColumnDefinitions="*,220,96">
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Bind ProductName}"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Bind DisplayFile}"
+                                       FontSize="11"
+                                       VerticalAlignment="Center"
+                                       Foreground="{x:Bind FileColor}"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <Button Grid.Column="2"
+                                    Content="Browse…"
+                                    Height="28" FontSize="11"
+                                    HorizontalAlignment="Stretch"
+                                    Tag="{x:Bind ProductName}"
+                                    Click="BrowseBtn_Click"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+    </Grid>
+</Page>
