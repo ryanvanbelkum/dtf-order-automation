@@ -14,7 +14,7 @@ public class LogService
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
-    private const int MaxEntries = 50;
+    private const int MaxEntries = 500;
 
     public List<RunResult> Load()
     {

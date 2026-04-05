@@ -1,7 +1,8 @@
 <Page
     x:Class="DtfOrderAutomation.Pages.LastRunPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:DtfOrderAutomation.Pages">
 
     <Grid RowDefinitions="Auto,*" Padding="8">
 
@@ -10,17 +11,138 @@
             <Button x:Name="ClearBtn" Content="Clear" Click="ClearBtn_Click"/>
         </StackPanel>
 
-        <!-- Log output -->
+        <!-- ── Live log (shown during an active run) ───────────────────── -->
         <ScrollViewer Grid.Row="1"
-                      x:Name="LogScroll"
+                      x:Name="LiveLogPanel"
                       VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Auto">
+                      HorizontalScrollBarVisibility="Auto"
+                      Visibility="Collapsed">
             <TextBlock x:Name="LogText"
                        FontFamily="Cascadia Code, Consolas, Courier New"
                        FontSize="12"
                        TextWrapping="NoWrap"
                        IsTextSelectionEnabled="True"
                        Padding="12"/>
+        </ScrollViewer>
+
+        <!-- ── Structured results (shown when not running) ────────────── -->
+        <ScrollViewer Grid.Row="1"
+                      x:Name="ResultsPanel"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="4" Padding="0,0,0,12">
+
+                <!-- Summary strip -->
+                <StackPanel x:Name="SummaryPanel"
+                            Orientation="Horizontal"
+                            Spacing="24"
+                            Padding="4,0,4,8">
+                    <TextBlock x:Name="SummaryTimestamp"
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SummaryOrders"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SummaryFiles"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SummarySkipped"
+                               FontSize="12"
+                               Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                               VerticalAlignment="Center"
+                               Visibility="Collapsed"/>
+                </StackPanel>
+
+                <!-- ── Processed orders ────────────────────────────────── -->
+                <TextBlock x:Name="ProcessedHeader"
+                           Text="PROCESSED"
+                           FontSize="10" FontWeight="SemiBold"
+                           CharacterSpacing="50"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           Margin="12,4,0,2"
+                           Visibility="Collapsed"/>
+
+                <ItemsControl ItemsSource="{x:Bind ProcessedRows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:OrderRow">
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1" CornerRadius="6"
+                                    Padding="12,8" Margin="0,2"
+                                    Tapped="ProcessedRow_Tapped">
+                                <Grid ColumnDefinitions="24,*,72,160,Auto">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{x:Bind StatusIcon}"
+                                               Foreground="{x:Bind StatusColor}"
+                                               FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{x:Bind Product}"
+                                               FontSize="12" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{x:Bind Size}"
+                                               FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{x:Bind File}"
+                                               FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="4"
+                                               Text="{x:Bind OrderId}"
+                                               FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               Margin="12,0,0,0"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── Unmapped / skipped orders ───────────────────────── -->
+                <TextBlock x:Name="UnmappedHeader"
+                           Text="UNMAPPED"
+                           FontSize="10" FontWeight="SemiBold"
+                           CharacterSpacing="50"
+                           Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                           Margin="12,12,0,2"
+                           Visibility="Collapsed"/>
+
+                <ItemsControl ItemsSource="{x:Bind UnmappedRows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:OrderRow">
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1" CornerRadius="6"
+                                    Padding="12,8" Margin="0,2">
+                                <Grid ColumnDefinitions="24,*,72,Auto,Auto">
+                                    <TextBlock Grid.Column="0"
+                                               Text="⚠"
+                                               Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                               FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{x:Bind Product}"
+                                               FontSize="12" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{x:Bind Size}"
+                                               FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{x:Bind OrderId}"
+                                               FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               Margin="0,0,12,0"/>
+                                    <Button Grid.Column="4"
+                                            Content="Map Design File…"
+                                            Height="28" FontSize="11"
+                                            Tag="{x:Bind}"
+                                            Click="UnmappedMapBtn_Click"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </StackPanel>
         </ScrollViewer>
 
     </Grid>

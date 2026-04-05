@@ -85,7 +85,6 @@ public sealed partial class MainWindow : Window
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            App.SchedulerService.Stop();
             _tray.Dispose();
             Application.Current.Exit();
         });

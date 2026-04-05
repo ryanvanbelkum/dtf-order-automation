@@ -25,12 +25,6 @@ public class AppConfig
     [JsonPropertyName("hot_folder")]
     public string HotFolder { get; set; } = "";
 
-    [JsonPropertyName("interval_hours")]
-    public int IntervalHours { get; set; } = 1;
-
-    [JsonPropertyName("schedule_enabled")]
-    public bool ScheduleEnabled { get; set; } = true;
-
     [JsonPropertyName("last_run")]
     public string? LastRun { get; set; }
 }

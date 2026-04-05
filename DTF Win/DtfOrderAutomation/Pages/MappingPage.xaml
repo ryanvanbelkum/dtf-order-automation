@@ -55,7 +55,8 @@
                   x:Name="ProductList"
                   ItemsSource="{x:Bind DisplayedItems}"
                   SelectionMode="None"
-                  IsItemClickEnabled="False">
+                  IsItemClickEnabled="True"
+                  ItemClick="ProductList_ItemClick">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="Padding" Value="0"/>

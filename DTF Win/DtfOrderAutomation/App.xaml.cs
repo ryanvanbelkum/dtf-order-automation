@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DtfOrderAutomation.Models;
@@ -13,9 +15,9 @@ public partial class App : Application
     public static ConfigService    ConfigService    { get; } = new();
     public static LogService       LogService       { get; } = new();
     public static MappingService   MappingService   { get; } = new();
+    public static ProductsService  ProductsService  { get; } = new();
     public static ShopifyService   ShopifyService   { get; private set; } = null!;
     public static AutomationService AutomationService { get; private set; } = null!;
-    public static SchedulerService SchedulerService { get; } = new();
     public static UpdateService    UpdateService    { get; } = new();
 
     public static AppConfig Config    { get; private set; } = null!;
@@ -38,10 +40,6 @@ public partial class App : Application
         ShopifyService    = new ShopifyService(ConfigService);
         AutomationService = new AutomationService(ShopifyService, MappingService);
 
-        // Wire scheduler → run engine
-        SchedulerService.RunRequested += (_, _) => _ = RunAutomationAsync();
-        SchedulerService.SetSchedule(Config.ScheduleEnabled, Config.IntervalHours);
-
         // Create main window (hidden until ready)
         Window = new MainWindow();
         WindowHandle = WinRT.Interop.WindowNative.GetWindowHandle(Window);
@@ -53,12 +51,19 @@ public partial class App : Application
 
     // ── Automation run ─────────────────────────────────────────────────────
 
-    public static async Task RunAutomationAsync()
+    public static async Task RunAutomationAsync(DateTime? from = null, DateTime? to = null)
     {
         if (State.IsRunning) return;
 
         var cts = new CancellationTokenSource();
         State.BeginRun(cts);
+
+        // Only skip orders that were actually sent to CADlink in a previous run
+        var alreadyProcessed = State.Log
+            .SelectMany(r => r.OrderDetails)
+            .Where(d => d.SentToCadLink)
+            .Select(d => d.OrderId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         RunResult result;
         try
@@ -66,7 +71,10 @@ public partial class App : Application
             result = await AutomationService.RunAsync(
                 Config,
                 line => State.EmitLog(line),
-                cts.Token);
+                cts.Token,
+                from,
+                to,
+                alreadyProcessed);
         }
         catch (OperationCanceledException)
         {
@@ -93,9 +101,6 @@ public partial class App : Application
         Config.LastRun = result.Timestamp;
         ConfigService.Save(Config);
         LogService.Append(State.Log, result);
-
-        // Reset scheduler countdown
-        SchedulerService.ResetAfterRun();
 
         State.EndRun(result);
     }

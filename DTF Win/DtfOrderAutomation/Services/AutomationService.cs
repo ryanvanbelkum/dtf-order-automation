@@ -26,7 +26,10 @@ public class AutomationService
     public async Task<RunResult> RunAsync(
         AppConfig config,
         Action<string> log,
-        CancellationToken ct = default)
+        CancellationToken ct              = default,
+        DateTime? from                    = null,
+        DateTime? to                      = null,
+        HashSet<string>? alreadyProcessed = null)
     {
         var result = new RunResult { Timestamp = DateTime.Now.ToString("O"), Status = "success" };
 
@@ -40,11 +43,20 @@ public class AutomationService
         ct.ThrowIfCancellationRequested();
 
         // ── Fetch orders ──────────────────────────────────────────────────
-        log("\nFetching orders from Shopify…");
+        if (from.HasValue)
+        {
+            var toStr = to.HasValue ? to.Value.ToString("MMM d, h:mm tt") : "now";
+            log($"\nFetching orders from Shopify… ({from.Value:MMM d, h:mm tt} → {toStr})");
+        }
+        else
+        {
+            log("\nFetching orders from Shopify…");
+        }
+
         List<JsonElement>? orders;
         try
         {
-            orders = await _shopify.FetchOrdersAsync(config);
+            orders = await _shopify.FetchOrdersAsync(config, from, to);
         }
         catch (Exception ex)
         {
@@ -78,9 +90,23 @@ public class AutomationService
             ct.ThrowIfCancellationRequested();
 
             var orderId   = order.TryGetProperty("name", out var n) ? n.GetString()! : order.GetProperty("id").GetRawText();
+
             var lineItems = order.TryGetProperty("line_items", out var li)
                           ? li.EnumerateArray().ToList()
                           : new List<JsonElement>();
+
+            // Record already-sent orders so the UI can show them, but don't process again
+            if (alreadyProcessed?.Contains(orderId) == true)
+            {
+                log($"Order {orderId} — already sent to CADlink");
+                foreach (var item in lineItems)
+                {
+                    var pt   = item.TryGetProperty("title", out var t) ? t.GetString()?.Trim() ?? "" : "";
+                    var size = ExtractSize(item);
+                    result.OrderDetails.Add(new() { OrderId = orderId, Product = pt, Size = size, Status = "already_sent" });
+                }
+                continue;
+            }
 
             log($"Order {orderId}  ({lineItems.Count} line item(s))");
 
@@ -88,25 +114,45 @@ public class AutomationService
             {
                 ct.ThrowIfCancellationRequested();
 
-                var productName = item.TryGetProperty("name", out var pn) ? pn.GetString()?.Trim() ?? "" : "";
-                var size        = ExtractSize(item);
+                // `title` = product title only (e.g. "Custom T-Shirt")
+                // `name`  = title + variant   (e.g. "Custom T-Shirt - L / Blue")
+                // The Mapping tab keys by title, so try title first then fall back to name.
+                var productTitle = item.TryGetProperty("title", out var pt) ? pt.GetString()?.Trim() ?? "" : "";
+                var productName  = item.TryGetProperty("name",  out var pn) ? pn.GetString()?.Trim() ?? "" : "";
+                var size         = ExtractSize(item);
 
-                if (!mapping.TryGetValue(productName, out var designFile) || string.IsNullOrEmpty(designFile))
+                // Determine which key has a mapping entry
+                string? designFile = null;
+                var mappingKey = productTitle;
+                if (!mapping.TryGetValue(productTitle, out designFile) || string.IsNullOrEmpty(designFile))
                 {
+                    mappingKey = productName;
+                    mapping.TryGetValue(productName, out designFile);
+                }
+
+                if (string.IsNullOrEmpty(designFile))
+                {
+                    // Log with full name so user can see the variant, but store title as Product
+                    // so it matches what the Mapping tab shows
                     log($"  ⚠ {productName} ({size}) — not in mapping, skipped");
                     result.Skipped++;
-                    result.SkippedDetails.Add(new() { OrderId = orderId, Reason = $"'{productName}' not in mapping" });
-                    result.OrderDetails.Add(new() { OrderId = orderId, Product = productName, Size = size, Status = "skipped" });
+                    result.SkippedDetails.Add(new() { OrderId = orderId, Reason = $"'{productTitle}' not in mapping" });
+                    result.OrderDetails.Add(new() { OrderId = orderId, Product = productTitle, Size = size, Status = "skipped" });
                     continue;
                 }
 
-                var designPath = Path.Combine(config.DesignsFolder, designFile);
+                // Mapping values may be absolute paths (set from Last Run page) or
+                // plain filenames (set from Mapping tab, relative to DesignsFolder)
+                var designPath = Path.IsPathRooted(designFile)
+                    ? designFile
+                    : Path.Combine(config.DesignsFolder, designFile);
+
                 if (!File.Exists(designPath))
                 {
                     log($"  ⚠ {productName} ({size}) — design file not found: {designFile}");
                     result.Skipped++;
                     result.SkippedDetails.Add(new() { OrderId = orderId, Reason = $"Design file not found: {designFile}" });
-                    result.OrderDetails.Add(new() { OrderId = orderId, Product = productName, Size = size, Status = "skipped", File = designFile });
+                    result.OrderDetails.Add(new() { OrderId = orderId, Product = productTitle, Size = size, Status = "skipped", File = designFile });
                     continue;
                 }
 
@@ -114,21 +160,23 @@ public class AutomationService
                 {
                     var (widthIn, heightIn) = CalculateSize(designPath, size);
 
-                    var baseName  = $"{orderId}_{productName}_{size}".Replace(" ", "_").Replace("/", "-");
-                    var jhdrName  = baseName + ".jhdr";
-                    var imgName   = baseName + Path.GetExtension(designFile);
-                    var jhdrPath  = Path.Combine(config.HotFolder, jhdrName);
-                    var imgDst    = Path.Combine(config.HotFolder, imgName);
-
-                    WriteJhdr(jhdrPath, widthIn, heightIn);
-                    await Task.Delay(100, ct);
-                    File.Copy(designPath, imgDst, overwrite: true);
+                    var baseName = $"{orderId}_{productTitle}_{size}".Replace(" ", "_").Replace("/", "-");
+                    var imgName  = baseName + Path.GetExtension(designFile);
 
                     log($"  ✓ {productName} ({size})  →  {imgName}  [{widthIn}\" × {heightIn}\"]");
-                    result.FilesQueued++;
                     result.OrdersProcessed++;
-                    result.HotFolderFiles.AddRange(new[] { jhdrName, imgName });
-                    result.OrderDetails.Add(new() { OrderId = orderId, Product = productName, Size = size, Status = "ok", File = imgName });
+                    result.OrderDetails.Add(new()
+                    {
+                        OrderId          = orderId,
+                        Product          = productTitle,
+                        Size             = size,
+                        Status           = "ok",
+                        File             = imgName,
+                        DesignSourcePath = designPath,
+                        PrintWidth       = widthIn,
+                        PrintHeight      = heightIn,
+                        SentToCadLink    = false,
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -145,9 +193,69 @@ public class AutomationService
             result.Status = "partial";
 
         log($"\n{"─".PadRight(48, '─')}\n" +
-            $"Done: {result.OrdersProcessed} processed · {result.FilesQueued} queued · {result.Skipped} skipped");
+            $"Done: {result.OrdersProcessed} matched · {result.Skipped} skipped — review below to send to CADlink");
 
         return result;
+    }
+
+    // ── Build a matched detail for a newly-assigned design file ───────────
+
+    /// <summary>
+    /// Tries to calculate print size and build a matched OrderDetail for a
+    /// previously-skipped item. Returns null if the file can't be read.
+    /// </summary>
+    public OrderDetail? TryBuildMatchedDetail(
+        string orderId, string product, string size,
+        string designFilePath, string designFileName)
+    {
+        try
+        {
+            var (widthIn, heightIn) = CalculateSize(designFilePath, size);
+            var baseName = $"{orderId}_{product}_{size}".Replace(" ", "_").Replace("/", "-");
+            var imgName  = baseName + Path.GetExtension(designFileName);
+            return new OrderDetail
+            {
+                OrderId          = orderId,
+                Product          = product,
+                Size             = size,
+                Status           = "ok",
+                File             = imgName,
+                DesignSourcePath = designFilePath,
+                PrintWidth       = widthIn,
+                PrintHeight      = heightIn,
+                SentToCadLink    = false,
+            };
+        }
+        catch { return null; }
+    }
+
+    // ── Deferred hot-folder send ───────────────────────────────────────────
+
+    /// <summary>
+    /// Writes JHDR + copies design image to the hot folder for each supplied item.
+    /// Marks each item SentToCadLink = true. Returns list of filenames dropped.
+    /// </summary>
+    public List<string> SendToHotFolder(AppConfig config, IEnumerable<OrderDetail> items)
+    {
+        var dropped = new List<string>();
+        foreach (var item in items)
+        {
+            if (item.SentToCadLink) continue;
+            if (string.IsNullOrEmpty(item.DesignSourcePath) || string.IsNullOrEmpty(item.File)) continue;
+
+            var baseName = Path.GetFileNameWithoutExtension(item.File);
+            var jhdrName = baseName + ".jhdr";
+            var jhdrPath = Path.Combine(config.HotFolder, jhdrName);
+            var imgDst   = Path.Combine(config.HotFolder, item.File);
+
+            WriteJhdr(jhdrPath, item.PrintWidth, item.PrintHeight);
+            File.Copy(item.DesignSourcePath, imgDst, overwrite: true);
+
+            item.SentToCadLink = true;
+            dropped.Add(jhdrName);
+            dropped.Add(item.File);
+        }
+        return dropped;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

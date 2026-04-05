@@ -63,15 +63,23 @@ public class ShopifyService : IDisposable
 
     // ── Orders ─────────────────────────────────────────────────────────────
 
-    public async Task<List<JsonElement>?> FetchOrdersAsync(AppConfig config)
+    public async Task<List<JsonElement>?> FetchOrdersAsync(
+        AppConfig config,
+        DateTime? from = null,
+        DateTime? to   = null)
     {
         var store = config.ShopifyStoreUrl.Trim().TrimEnd('/');
         var token = await GetTokenAsync(config);
         if (token is null) return null;
 
+        var query = "?status=open&fulfillment_status=unfulfilled&limit=250";
+        if (from.HasValue)
+            query += $"&created_at_min={Uri.EscapeDataString(from.Value.ToString("O"))}";
+        if (to.HasValue)
+            query += $"&created_at_max={Uri.EscapeDataString(to.Value.ToString("O"))}";
+
         using var req = new HttpRequestMessage(HttpMethod.Get,
-            $"https://{store}/admin/api/2024-01/orders.json" +
-            "?status=open&fulfillment_status=unfulfilled&limit=250");
+            $"https://{store}/admin/api/2024-01/orders.json{query}");
         req.Headers.Add("X-Shopify-Access-Token", token);
 
         var resp = await _http.SendAsync(req);
@@ -83,7 +91,7 @@ public class ShopifyService : IDisposable
 
     // ── Products ───────────────────────────────────────────────────────────
 
-    public async Task<(List<string> Products, string? Error)> FetchProductsAsync(AppConfig config)
+    public async Task<(List<ShopifyProduct> Products, string? Error)> FetchProductsAsync(AppConfig config)
     {
         var store = config.ShopifyStoreUrl.Trim().TrimEnd('/');
         string? token;
@@ -92,8 +100,8 @@ public class ShopifyService : IDisposable
 
         if (token is null) return (new(), "Could not get Shopify token — check Client ID and Secret in Settings");
 
-        var products = new List<string>();
-        string? url  = $"https://{store}/admin/api/2024-01/products.json?limit=250&fields=id,title";
+        var products = new List<ShopifyProduct>();
+        string? url  = $"https://{store}/admin/api/2024-01/products.json?limit=250&fields=id,title,images";
 
         while (url is not null)
         {
@@ -104,10 +112,30 @@ public class ShopifyService : IDisposable
             try { resp = await _http.SendAsync(req); resp.EnsureSuccessStatusCode(); }
             catch (Exception ex) { return (products, $"Error fetching products: {ex.Message}"); }
 
-            var data = await resp.Content.ReadFromJsonAsync<JsonElement>();
+            JsonElement data;
+            try { data = await resp.Content.ReadFromJsonAsync<JsonElement>(); }
+            catch (Exception ex) { return (products, $"Error reading response: {ex.Message}"); }
+
             foreach (var p in data.GetProperty("products").EnumerateArray())
-                if (p.TryGetProperty("title", out var t))
-                    products.Add(t.GetString() ?? "");
+            {
+                if (!p.TryGetProperty("title", out var t)) continue;
+
+                string? imageUrl = null;
+                if (p.TryGetProperty("images", out var imgs) &&
+                    imgs.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var img in imgs.EnumerateArray())
+                    {
+                        if (img.TryGetProperty("src", out var src))
+                        {
+                            imageUrl = src.GetString();
+                            break;
+                        }
+                    }
+                }
+
+                products.Add(new ShopifyProduct { Title = t.GetString() ?? "", ImageUrl = imageUrl });
+            }
 
             // Follow Link header for pagination
             url = null;

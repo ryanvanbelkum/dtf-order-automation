@@ -4,11 +4,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.UI;
-using Microsoft.UI.Dispatching;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage.Pickers;
 
 namespace DtfOrderAutomation.Pages;
@@ -17,7 +17,8 @@ namespace DtfOrderAutomation.Pages;
 
 public class MappingItem : INotifyPropertyChanged
 {
-    public string ProductName { get; set; } = "";
+    public string  ProductName { get; set; } = "";
+    public string? ImageUrl    { get; set; }
 
     private string _designFile = "";
     public string DesignFile
@@ -60,6 +61,27 @@ public sealed partial class MappingPage : Page
     {
         InitializeComponent();
         _mapping = App.MappingService.Load();
+        LoadCachedProducts();
+    }
+
+    private void LoadCachedProducts()
+    {
+        var cached = App.ProductsService.Load();
+        if (cached.Count == 0) return;
+
+        _allItems.Clear();
+        App.State.ProductImages.Clear();
+        foreach (var p in cached)
+        {
+            _mapping.TryGetValue(p.Title, out var file);
+            _allItems.Add(new MappingItem { ProductName = p.Title, DesignFile = file ?? "", ImageUrl = p.ImageUrl });
+            App.State.ProductImages[p.Title] = p.ImageUrl;
+        }
+
+        SearchBox.IsEnabled         = true;
+        SearchBox.PlaceholderText   = "Filter by name…";
+        UnmappedOnlyCheck.IsEnabled = true;
+        ApplyFilter();
     }
 
     // ── Sync ──────────────────────────────────────────────────────────────
@@ -84,14 +106,18 @@ public sealed partial class MappingPage : Page
         }
 
         _allItems.Clear();
-        foreach (var title in products)
+        App.State.ProductImages.Clear();
+        foreach (var p in products)
         {
-            _mapping.TryGetValue(title, out var file);
-            _allItems.Add(new MappingItem { ProductName = title, DesignFile = file ?? "" });
+            _mapping.TryGetValue(p.Title, out var file);
+            _allItems.Add(new MappingItem { ProductName = p.Title, DesignFile = file ?? "", ImageUrl = p.ImageUrl });
+            App.State.ProductImages[p.Title] = p.ImageUrl;
         }
 
-        SearchBox.IsEnabled       = true;
-        SearchBox.PlaceholderText = "Filter by name…";
+        App.ProductsService.Save(products);
+
+        SearchBox.IsEnabled         = true;
+        SearchBox.PlaceholderText   = "Filter by name…";
         UnmappedOnlyCheck.IsEnabled = true;
 
         ApplyFilter();
@@ -179,6 +205,55 @@ public sealed partial class MappingPage : Page
             Title           = "Saved",
             Content         = $"Mappings saved — {mapped} product(s) mapped.",
             CloseButtonText = "OK",
+            XamlRoot        = XamlRoot,
+        };
+        await dialog.ShowAsync();
+    }
+
+    // ── Row click → detail modal ──────────────────────────────────────────
+
+    private async void ProductList_ItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not MappingItem item) return;
+        await ShowProductDetailAsync(item.ProductName, item.DesignFile, item.IsMapped, item.ImageUrl);
+    }
+
+    private async Task ShowProductDetailAsync(string productName, string designFile, bool isMapped, string? imageUrl)
+    {
+        var panel = new StackPanel { Spacing = 12, Width = 300 };
+
+        if (!string.IsNullOrEmpty(imageUrl))
+        {
+            panel.Children.Add(new Image
+            {
+                Source              = new BitmapImage(new Uri(imageUrl)),
+                Height              = 220,
+                Stretch             = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            });
+        }
+
+        panel.Children.Add(new TextBlock
+        {
+            Text         = productName,
+            FontWeight   = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text         = isMapped ? $"Design file:  {designFile}" : "No design file mapped",
+            Foreground   = isMapped
+                ? (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"]
+                : (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var dialog = new ContentDialog
+        {
+            Title           = "Product Details",
+            Content         = panel,
+            CloseButtonText = "Close",
             XamlRoot        = XamlRoot,
         };
         await dialog.ShowAsync();

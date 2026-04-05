@@ -47,4 +47,9 @@ public class AppState
     // ── In-memory log (mirrors LogService, kept for fast UI reads) ─────────
 
     public List<RunResult> Log { get; } = new();
+
+    // ── Product image cache (populated on Shopify sync) ────────────────────
+
+    /// <summary>Maps product title → first Shopify image URL. Populated when MappingPage syncs.</summary>
+    public Dictionary<string, string?> ProductImages { get; } = new(StringComparer.OrdinalIgnoreCase);
 }

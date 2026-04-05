@@ -19,25 +19,6 @@
                 </StackPanel>
             </Button>
 
-            <!-- ── Next Scheduled Run ────────────────────────────────────── -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="20,16">
-                <StackPanel Spacing="4">
-                    <TextBlock Text="NEXT SCHEDULED RUN"
-                               FontSize="10" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                               CharacterSpacing="50"/>
-                    <TextBlock x:Name="NextRunTime"
-                               Text="—"
-                               FontSize="28" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="Countdown"
-                               Text=""
-                               FontSize="12"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </Border>
-
             <!-- ── Last Run ──────────────────────────────────────────────── -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
@@ -57,36 +38,66 @@
                 </StackPanel>
             </Border>
 
-            <!-- ── Schedule controls ─────────────────────────────────────── -->
+            <!-- ── All-Time Stats ────────────────────────────────────────── -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="20,16">
-                <StackPanel Spacing="16">
-                    <TextBlock Text="SCHEDULE"
+                <StackPanel Spacing="10">
+                    <TextBlock Text="ALL-TIME STATISTICS"
                                FontSize="10" FontWeight="SemiBold"
                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                CharacterSpacing="50"/>
-
-                    <!-- Interval stepper -->
-                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                        <TextBlock Text="Run automatically every"
-                                   FontSize="13" VerticalAlignment="Center"/>
-                        <Button Content="−" Width="32" Height="32"
-                                Click="DecInterval_Click"/>
-                        <TextBlock x:Name="IntervalDisplay"
-                                   Text="1" Width="28" TextAlignment="Center"
-                                   FontSize="14" FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <Button Content="+" Width="32" Height="32"
-                                Click="IncInterval_Click"/>
-                        <TextBlock Text="hour(s)"
-                                   FontSize="13" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- Enable/disable toggle -->
-                    <ToggleSwitch x:Name="ScheduleSwitch"
-                                  Header="Schedule enabled"
-                                  Toggled="ScheduleSwitch_Toggled"/>
+                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
+                        <!-- Total Runs -->
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock x:Name="StatTotalRuns"
+                                       Text="0"
+                                       FontSize="22" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Runs"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- Total Orders -->
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock x:Name="StatTotalOrders"
+                                       Text="0"
+                                       FontSize="22" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Orders"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- Total Files -->
+                        <StackPanel Grid.Column="2" Spacing="2">
+                            <TextBlock x:Name="StatTotalFiles"
+                                       Text="0"
+                                       FontSize="22" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Files Queued"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- Total Skipped -->
+                        <StackPanel Grid.Column="3" Spacing="2">
+                            <TextBlock x:Name="StatTotalSkipped"
+                                       Text="0"
+                                       FontSize="22" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Skipped"
+                                       FontSize="11"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock x:Name="StatSuccessRate"
+                               Text=""
+                               FontSize="11"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Center"/>
                 </StackPanel>
             </Border>
 

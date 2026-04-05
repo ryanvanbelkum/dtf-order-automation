@@ -104,6 +104,25 @@
                 </StackPanel>
             </Border>
 
+            <!-- Testing -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="20,16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="TESTING"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               CharacterSpacing="50"/>
+                    <TextBlock Text="Clear the list of already-processed orders so they will be picked up again on the next run."
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                    <Button x:Name="ClearProcessedBtn"
+                            Content="Clear Processed Orders"
+                            Click="ClearProcessedBtn_Click"/>
+                </StackPanel>
+            </Border>
+
             <!-- Save button -->
             <Button Content="Save Settings"
                     HorizontalAlignment="Stretch"

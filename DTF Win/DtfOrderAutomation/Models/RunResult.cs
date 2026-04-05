@@ -46,8 +46,25 @@ public class OrderDetail
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
 
+    /// <summary>Destination filename (image) in the hot folder.</summary>
     [JsonPropertyName("file")]
     public string? File { get; set; }
+
+    /// <summary>Full path to the source design file on disk. Null for skipped items.</summary>
+    [JsonPropertyName("design_source_path")]
+    public string? DesignSourcePath { get; set; }
+
+    /// <summary>Calculated print width in inches.</summary>
+    [JsonPropertyName("print_width")]
+    public double PrintWidth { get; set; }
+
+    /// <summary>Calculated print height in inches.</summary>
+    [JsonPropertyName("print_height")]
+    public double PrintHeight { get; set; }
+
+    /// <summary>Whether this item has been sent to the CADlink hot folder.</summary>
+    [JsonPropertyName("sent_to_cadlink")]
+    public bool SentToCadLink { get; set; }
 }
 
 public class SkippedDetail
