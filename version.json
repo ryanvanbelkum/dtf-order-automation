@@ -1,5 +1,5 @@
 {
-  "version": "0.0.2",
-  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.2/DTF.Setup.exe",
-  "release_notes": "Fixes mapping diagnostics (product_id shown in skip reasons) and duplicate unmapped-row display bug."
+  "version": "0.0.3",
+  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.3/DTF.Setup.exe",
+  "release_notes": "Fixes silent auto-update failure caused by broken cmd.exe quoting and a file-lock race in the update installer step."
 }
