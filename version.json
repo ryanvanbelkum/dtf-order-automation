@@ -1,5 +1,5 @@
 {
-  "version": "0.0.3",
-  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.3/DTF.Setup.exe",
-  "release_notes": "Fixes silent auto-update failure caused by broken cmd.exe quoting and a file-lock race in the update installer step."
+  "version": "0.0.4",
+  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.4/DTF.Setup.exe",
+  "release_notes": "Shows Shopify product ID on the Mapping and Last Run tabs, and a clearer order number on Last Run — for diagnosing mapping mismatches."
 }
