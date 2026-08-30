@@ -20,4 +20,22 @@
     <PackageReference Include="System.Drawing.Common" Version="10.0.5" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Visual C++ Runtime DLLs, redistributed app-local so customers never need to
+         install the VC++ Redistributable separately. Required by native Windows App
+         SDK components; not included by WindowsAppSDKSelfContained. -->
+    <None Include="Redist\vcruntime140.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>vcruntime140.dll</Link>
+    </None>
+    <None Include="Redist\vcruntime140_1.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>vcruntime140_1.dll</Link>
+    </None>
+    <None Include="Redist\msvcp140.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>msvcp140.dll</Link>
+    </None>
+  </ItemGroup>
+
 </Project>
