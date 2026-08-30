@@ -45,40 +45,70 @@ public class UpdateService : IDisposable
     }
 
     /// <summary>
-    /// Downloads the MSIX installer from <paramref name="downloadUrl"/> and launches it,
-    /// then exits the current process so Windows can replace the package.
+    /// Downloads the installer from <paramref name="downloadUrl"/>, runs it silently to
+    /// update the app in place, then relaunches the app and exits the current process.
+    ///
+    /// The customer never reinstalls manually: the existing install is overwritten and
+    /// the app reopens. User data (settings, mappings, history) lives under
+    /// %LocalAppData%\DtfOrderAutomation and is untouched by the installer.
     /// </summary>
     public async Task DownloadAndInstallAsync(string downloadUrl, IProgress<int>? progress = null)
     {
-        var tempPath = Path.Combine(Path.GetTempPath(), "DtfSetup.msix");
+        // Preserve the artifact's real extension so it's executed correctly.
+        var ext = Path.GetExtension(new Uri(downloadUrl).AbsolutePath);
+        if (string.IsNullOrWhiteSpace(ext)) ext = ".exe";
+        var tempPath = Path.Combine(Path.GetTempPath(), $"DtfSetup{ext}");
 
-        using var resp = await _http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
-        resp.EnsureSuccessStatusCode();
-
-        var total = resp.Content.Headers.ContentLength ?? -1L;
-
-        await using var stream = await resp.Content.ReadAsStreamAsync();
-        await using var file   = File.Create(tempPath);
-
-        var buffer     = new byte[81920];
-        long downloaded = 0;
-        int  read;
-
-        while ((read = await stream.ReadAsync(buffer)) > 0)
+        using (var resp = await _http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
         {
-            await file.WriteAsync(buffer.AsMemory(0, read));
-            downloaded += read;
-            if (total > 0) progress?.Report((int)(downloaded * 100 / total));
+            resp.EnsureSuccessStatusCode();
+
+            var total = resp.Content.Headers.ContentLength ?? -1L;
+
+            await using var stream = await resp.Content.ReadAsStreamAsync();
+            await using var file   = File.Create(tempPath);
+
+            var buffer      = new byte[81920];
+            long downloaded = 0;
+            int  read;
+
+            while ((read = await stream.ReadAsync(buffer)) > 0)
+            {
+                await file.WriteAsync(buffer.AsMemory(0, read));
+                downloaded += read;
+                if (total > 0) progress?.Report((int)(downloaded * 100 / total));
+            }
+
+            await file.FlushAsync();
         }
 
-        // Close before launching
-        await file.FlushAsync();
-        file.Close();
+        var appExe = Environment.ProcessPath
+                     ?? Process.GetCurrentProcess().MainModule?.FileName;
 
-        // Open the MSIX — Windows will prompt the user to install/update
-        Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
+        if (ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) && appExe is not null)
+        {
+            // Run the installer silently, then relaunch the (overwritten) app.
+            // Chained via cmd so the relaunch happens only after the installer exits,
+            // and detached so it survives this process closing.
+            var command =
+                $"\"{tempPath}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART " +
+                $"&& start \"\" \"{appExe}\"";
 
-        // Exit so the package can be replaced
+            Process.Start(new ProcessStartInfo
+            {
+                FileName        = "cmd.exe",
+                Arguments       = $"/c \"{command}\"",
+                UseShellExecute = false,
+                CreateNoWindow  = true,
+            });
+        }
+        else
+        {
+            // Fallback for non-exe artifacts: just open it and let Windows/the user drive.
+            Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
+        }
+
+        // Exit so the installer can overwrite the running files.
         Application.Current.Exit();
     }
 

@@ -104,22 +104,23 @@
                 </StackPanel>
             </Border>
 
-            <!-- Testing -->
+            <!-- Danger Zone -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderBrush="#CC3333"
                     BorderThickness="1" CornerRadius="8" Padding="20,16">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="TESTING"
+                    <TextBlock Text="DANGER ZONE"
                                FontSize="10" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               Foreground="#CC3333"
                                CharacterSpacing="50"/>
-                    <TextBlock Text="Clear the list of already-processed orders so they will be picked up again on the next run."
+                    <TextBlock Text="Permanently deletes all mappings, synced products, and run history. Your credentials and folder paths will be kept."
                                FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                TextWrapping="Wrap"/>
-                    <Button x:Name="ClearProcessedBtn"
-                            Content="Clear Processed Orders"
-                            Click="ClearProcessedBtn_Click"/>
+                    <Button x:Name="ResetAllBtn"
+                            Content="Reset All App Data"
+                            Foreground="#CC3333"
+                            Click="ResetAllBtn_Click"/>
                 </StackPanel>
             </Border>
 

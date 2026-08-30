@@ -15,8 +15,11 @@ public class RunResult
     [JsonPropertyName("orders_processed")]
     public int OrdersProcessed { get; set; }
 
+    // Number of design files actually dropped into the CadLink hot folder
+    // (incremented by the "Send to CadLink" action). JSON name kept as
+    // "files_queued" for backward compatibility with existing history logs.
     [JsonPropertyName("files_queued")]
-    public int FilesQueued { get; set; }
+    public int FilesSent { get; set; }
 
     [JsonPropertyName("skipped")]
     public int Skipped { get; set; }
@@ -35,6 +38,10 @@ public class OrderDetail
 {
     [JsonPropertyName("order_id")]
     public string OrderId { get; set; } = "";
+
+    /// <summary>Shopify product_id from the line item. Used as the stable mapping key.</summary>
+    [JsonPropertyName("product_id")]
+    public string ProductId { get; set; } = "";
 
     [JsonPropertyName("product")]
     public string Product { get; set; } = "";

@@ -101,9 +101,10 @@ public class AutomationService
                 log($"Order {orderId} — already sent to CADlink");
                 foreach (var item in lineItems)
                 {
-                    var pt   = item.TryGetProperty("title", out var t) ? t.GetString()?.Trim() ?? "" : "";
+                    var pt  = item.TryGetProperty("title", out var t)   ? t.GetString()?.Trim() ?? "" : "";
+                    var pid = item.TryGetProperty("product_id", out var p) ? p.GetRawText() : "";
                     var size = ExtractSize(item);
-                    result.OrderDetails.Add(new() { OrderId = orderId, Product = pt, Size = size, Status = "already_sent" });
+                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = pid, Product = pt, Size = size, Status = "already_sent", SentToCadLink = true });
                 }
                 continue;
             }
@@ -116,18 +117,24 @@ public class AutomationService
 
                 // `title` = product title only (e.g. "Custom T-Shirt")
                 // `name`  = title + variant   (e.g. "Custom T-Shirt - L / Blue")
-                // The Mapping tab keys by title, so try title first then fall back to name.
                 var productTitle = item.TryGetProperty("title", out var pt) ? pt.GetString()?.Trim() ?? "" : "";
                 var productName  = item.TryGetProperty("name",  out var pn) ? pn.GetString()?.Trim() ?? "" : "";
+                var productId    = item.TryGetProperty("product_id", out var pid) ? pid.GetRawText() : "";
                 var size         = ExtractSize(item);
 
-                // Determine which key has a mapping entry
+                // Prefer product_id as the mapping key (stable, unaffected by title changes).
+                // Fall back to title and then full name for backward compatibility with
+                // mappings that were saved before product_id was introduced.
                 string? designFile = null;
-                var mappingKey = productTitle;
-                if (!mapping.TryGetValue(productTitle, out designFile) || string.IsNullOrEmpty(designFile))
+                var mappingKey = productId;
+                if (string.IsNullOrEmpty(productId) || !mapping.TryGetValue(productId, out designFile) || string.IsNullOrEmpty(designFile))
                 {
-                    mappingKey = productName;
-                    mapping.TryGetValue(productName, out designFile);
+                    mappingKey = productTitle;
+                    if (!mapping.TryGetValue(productTitle, out designFile) || string.IsNullOrEmpty(designFile))
+                    {
+                        mappingKey = productName;
+                        mapping.TryGetValue(productName, out designFile);
+                    }
                 }
 
                 if (string.IsNullOrEmpty(designFile))
@@ -137,7 +144,7 @@ public class AutomationService
                     log($"  ⚠ {productName} ({size}) — not in mapping, skipped");
                     result.Skipped++;
                     result.SkippedDetails.Add(new() { OrderId = orderId, Reason = $"'{productTitle}' not in mapping" });
-                    result.OrderDetails.Add(new() { OrderId = orderId, Product = productTitle, Size = size, Status = "skipped" });
+                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = productId, Product = productTitle, Size = size, Status = "skipped" });
                     continue;
                 }
 
@@ -152,7 +159,7 @@ public class AutomationService
                     log($"  ⚠ {productName} ({size}) — design file not found: {designFile}");
                     result.Skipped++;
                     result.SkippedDetails.Add(new() { OrderId = orderId, Reason = $"Design file not found: {designFile}" });
-                    result.OrderDetails.Add(new() { OrderId = orderId, Product = productTitle, Size = size, Status = "skipped", File = designFile });
+                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = productId, Product = productTitle, Size = size, Status = "skipped", File = designFile });
                     continue;
                 }
 
@@ -160,14 +167,14 @@ public class AutomationService
                 {
                     var (widthIn, heightIn) = CalculateSize(designPath, size);
 
-                    var baseName = $"{orderId}_{productTitle}_{size}".Replace(" ", "_").Replace("/", "-");
-                    var imgName  = baseName + Path.GetExtension(designFile);
+                    var imgName = BuildOutputFileName(orderId, size, designFile);
 
                     log($"  ✓ {productName} ({size})  →  {imgName}  [{widthIn}\" × {heightIn}\"]");
                     result.OrdersProcessed++;
                     result.OrderDetails.Add(new()
                     {
                         OrderId          = orderId,
+                        ProductId        = productId,
                         Product          = productTitle,
                         Size             = size,
                         Status           = "ok",
@@ -211,8 +218,7 @@ public class AutomationService
         try
         {
             var (widthIn, heightIn) = CalculateSize(designFilePath, size);
-            var baseName = $"{orderId}_{product}_{size}".Replace(" ", "_").Replace("/", "-");
-            var imgName  = baseName + Path.GetExtension(designFileName);
+            var imgName = BuildOutputFileName(orderId, size, designFileName);
             return new OrderDetail
             {
                 OrderId          = orderId,
@@ -232,12 +238,26 @@ public class AutomationService
     // ── Deferred hot-folder send ───────────────────────────────────────────
 
     /// <summary>
-    /// Writes JHDR + copies design image to the hot folder for each supplied item.
+    /// Drops a JHDR job header + design image into the hot folder for each item.
+    ///
+    /// CadLink's hot folder requires the .jhdr to be present BEFORE the graphic
+    /// appears, otherwise the graphic is imported without the size settings
+    /// (see https://help.cadlink.com/.../job_header_files.htm). To guarantee
+    /// this ordering — and to avoid CadLink ever seeing a half-copied image —
+    /// the graphic is first staged under a ".part" name the hot folder ignores,
+    /// the .jhdr is written, and only then is the graphic atomically renamed
+    /// into place as the final import trigger.
+    ///
     /// Marks each item SentToCadLink = true. Returns list of filenames dropped.
     /// </summary>
     public List<string> SendToHotFolder(AppConfig config, IEnumerable<OrderDetail> items)
     {
         var dropped = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(config.HotFolder))
+            throw new InvalidOperationException("Hot folder is not configured.");
+        Directory.CreateDirectory(config.HotFolder);
+
         foreach (var item in items)
         {
             if (item.SentToCadLink) continue;
@@ -247,9 +267,19 @@ public class AutomationService
             var jhdrName = baseName + ".jhdr";
             var jhdrPath = Path.Combine(config.HotFolder, jhdrName);
             var imgDst   = Path.Combine(config.HotFolder, item.File);
+            var imgStage = imgDst + ".part";   // extension the hot folder won't import
 
+            // 1. Stage the graphic under a non-image extension (not yet visible to CadLink).
+            File.Copy(item.DesignSourcePath, imgStage, overwrite: true);
+
+            // 2. Write the job header so the size settings are on disk first.
             WriteJhdr(jhdrPath, item.PrintWidth, item.PrintHeight);
-            File.Copy(item.DesignSourcePath, imgDst, overwrite: true);
+
+            // 3. Give the .jhdr a moment to settle (matters on network/shared drives),
+            //    then atomically reveal the graphic as the final import trigger.
+            Thread.Sleep(150);
+            if (File.Exists(imgDst)) File.Delete(imgDst);
+            File.Move(imgStage, imgDst);
 
             item.SentToCadLink = true;
             dropped.Add(jhdrName);
@@ -299,6 +329,25 @@ public class AutomationService
             heightIn = widthIn;
         }
         return (widthIn, heightIn);
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        return string.Concat(name.Select(c => Array.IndexOf(invalid, c) >= 0 ? '_' : c));
+    }
+
+    /// <summary>
+    /// Builds the hot-folder output filename. The size is included so the same
+    /// design ordered in two sizes (which can print at different dimensions —
+    /// e.g. adult vs youth) does not collide on a single name and overwrite the
+    /// other item's graphic and .jhdr.
+    /// </summary>
+    private static string BuildOutputFileName(string orderId, string size, string designFile)
+    {
+        var ext  = Path.GetExtension(designFile);
+        var stem = Path.GetFileNameWithoutExtension(designFile);
+        return SanitizeFileName($"{orderId}_{size}_{stem}{ext}");
     }
 
     private static void WriteJhdr(string path, double widthIn, double heightIn)

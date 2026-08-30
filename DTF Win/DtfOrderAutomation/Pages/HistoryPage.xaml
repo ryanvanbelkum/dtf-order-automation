@@ -6,27 +6,13 @@
 
     <Grid RowDefinitions="Auto,*" Padding="12,8">
 
-        <!-- Column headers -->
-        <Grid Grid.Row="0"
-              ColumnDefinitions="*,140,100,120"
-              Padding="12,0,12,4">
-            <TextBlock Grid.Column="0" Text="DATE &amp; TIME"
-                       FontSize="10" FontWeight="SemiBold"
-                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                       CharacterSpacing="50"/>
-            <TextBlock Grid.Column="1" Text="ORDERS" TextAlignment="Center"
-                       FontSize="10" FontWeight="SemiBold"
-                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                       CharacterSpacing="50"/>
-            <TextBlock Grid.Column="2" Text="SKIPPED" TextAlignment="Center"
-                       FontSize="10" FontWeight="SemiBold"
-                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                       CharacterSpacing="50"/>
-            <TextBlock Grid.Column="3" Text="STATUS" TextAlignment="Center"
-                       FontSize="10" FontWeight="SemiBold"
-                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                       CharacterSpacing="50"/>
-        </Grid>
+        <!-- Caption -->
+        <TextBlock Grid.Row="0"
+                   Text="Each run is listed below — expand a run to see its order items and what was sent to CadLink."
+                   FontSize="12"
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   Margin="4,0,4,8"
+                   TextWrapping="Wrap"/>
 
         <!-- History list -->
         <ListView Grid.Row="1"
@@ -43,29 +29,75 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="local:HistoryItem">
-                    <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1" CornerRadius="6"
-                            Padding="12,10" Margin="0,2">
-                        <Grid ColumnDefinitions="*,140,100,120">
-                            <TextBlock Grid.Column="0"
-                                       Text="{x:Bind DateDisplay}"
-                                       FontSize="12" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="1"
-                                       Text="{x:Bind OrdersProcessed}"
-                                       FontSize="12" TextAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2"
-                                       Text="{x:Bind Skipped}"
-                                       FontSize="12" TextAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="3"
-                                       Text="{x:Bind StatusDisplay}"
-                                       FontSize="12" TextAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       Foreground="{x:Bind StatusColor}"/>
-                        </Grid>
-                    </Border>
+                    <Expander Margin="0,2"
+                              HorizontalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch">
+
+                        <!-- ── Run summary (header) ───────────────────────── -->
+                        <Expander.Header>
+                            <Grid ColumnDefinitions="*,Auto" Padding="0,8">
+                                <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Bind DateDisplay}"
+                                               FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{x:Bind SummaryLine}"
+                                               FontSize="12"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                <Border Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        Background="{x:Bind StatusBackground}"
+                                        CornerRadius="10"
+                                        Padding="10,3"
+                                        Margin="0,0,8,0">
+                                    <TextBlock Text="{x:Bind StatusDisplay}"
+                                               FontSize="12"
+                                               Foreground="{x:Bind StatusColor}"/>
+                                </Border>
+                            </Grid>
+                        </Expander.Header>
+
+                        <!-- ── Order items (content) ──────────────────────── -->
+                        <StackPanel Spacing="1" Padding="0,4,0,4">
+
+                            <TextBlock Text="No order items recorded for this run."
+                                       FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       Visibility="{x:Bind EmptyHintVisibility}"
+                                       Margin="4,4"/>
+
+                            <ItemsControl ItemsSource="{x:Bind Details}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="local:HistoryDetailRow">
+                                        <Grid ColumnDefinitions="*,56,1.4*,Auto"
+                                              Padding="6,7" Margin="0,1"
+                                              ColumnSpacing="8">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{x:Bind Product}"
+                                                       FontSize="12" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{x:Bind Size}"
+                                                       FontSize="12" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{x:Bind File}"
+                                                       FontSize="11" VerticalAlignment="Center"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Border Grid.Column="3"
+                                                    Background="{x:Bind StatusBackground}"
+                                                    CornerRadius="10"
+                                                    Padding="9,2"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{x:Bind StatusText}"
+                                                           FontSize="11"
+                                                           Foreground="{x:Bind StatusColor}"/>
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Expander>
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>

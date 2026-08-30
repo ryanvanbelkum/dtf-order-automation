@@ -50,36 +50,43 @@ public sealed partial class SettingsPage : Page
         return folder?.Path;
     }
 
-    // ── Clear Processed Orders ─────────────────────────────────────────────
+    // ── Reset All App Data ─────────────────────────────────────────────────
 
-    private async void ClearProcessedBtn_Click(object sender, RoutedEventArgs e)
+    private async void ResetAllBtn_Click(object sender, RoutedEventArgs e)
     {
         var confirm = new ContentDialog
         {
-            Title             = "Clear Processed Orders?",
-            Content           = "All orders previously sent to the hot folder will be treated as new on the next run. This cannot be undone.",
-            PrimaryButtonText = "Clear",
+            Title             = "Reset All App Data?",
+            Content           = "This will permanently delete all product mappings, synced products, and run history. Your credentials and folder paths will be kept. This cannot be undone.",
+            PrimaryButtonText = "Reset Everything",
             CloseButtonText   = "Cancel",
             XamlRoot          = XamlRoot,
         };
 
         if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
 
-        // Strip the OrderDetails from every run in the log so the already-processed
-        // set comes up empty on the next run, without losing run count / stats.
-        foreach (var run in App.State.Log)
-            run.OrderDetails.Clear();
+        // Clear in-memory state
+        App.State.Log.Clear();
+        App.State.ProductImages.Clear();
 
-        App.LogService.Save(App.State.Log);
+        // Delete persisted files
+        DeleteIfExists(Services.LogService.LogPath);
+        DeleteIfExists(Services.MappingService.MappingPath);
+        DeleteIfExists(Services.ProductsService.ProductsPath);
 
         var done = new ContentDialog
         {
-            Title           = "Done",
-            Content         = "Processed orders cleared. All unfulfilled orders will be picked up on the next run.",
+            Title           = "Reset Complete",
+            Content         = "All app data has been cleared.",
             CloseButtonText = "OK",
             XamlRoot        = XamlRoot,
         };
         await done.ShowAsync();
+    }
+
+    private static void DeleteIfExists(string path)
+    {
+        if (File.Exists(path)) File.Delete(path);
     }
 
     // ── Save ───────────────────────────────────────────────────────────────

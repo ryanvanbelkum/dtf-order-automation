@@ -9,21 +9,57 @@
         <!-- Toolbar -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
             <Button x:Name="ClearBtn" Content="Clear" Click="ClearBtn_Click"/>
+            <CheckBox x:Name="SelectAllCheck"
+                      Content="Select All"
+                      Click="SelectAllCheck_Click"
+                      VerticalAlignment="Center"/>
+            <Button x:Name="SendToCadLinkBtn"
+                    IsEnabled="False"
+                    Click="SendToCadLinkBtn_Click">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ProgressRing x:Name="SendSpinner"
+                                  Width="16" Height="16"
+                                  IsActive="False"
+                                  Visibility="Collapsed"/>
+                    <TextBlock x:Name="SendBtnText" Text="Send to CadLink"/>
+                </StackPanel>
+            </Button>
         </StackPanel>
 
         <!-- ── Live log (shown during an active run) ───────────────────── -->
-        <ScrollViewer Grid.Row="1"
-                      x:Name="LiveLogPanel"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Auto"
-                      Visibility="Collapsed">
-            <TextBlock x:Name="LogText"
-                       FontFamily="Cascadia Code, Consolas, Courier New"
-                       FontSize="12"
-                       TextWrapping="NoWrap"
-                       IsTextSelectionEnabled="True"
-                       Padding="12"/>
-        </ScrollViewer>
+        <Grid Grid.Row="1"
+              x:Name="LiveLogPanel"
+              RowDefinitions="Auto,*"
+              Visibility="Collapsed">
+
+            <!-- Running indicator -->
+            <StackPanel Grid.Row="0"
+                        Orientation="Horizontal"
+                        Spacing="10"
+                        Padding="12,8"
+                        VerticalAlignment="Center">
+                <ProgressRing x:Name="RunningRing"
+                              IsActive="True"
+                              Width="20" Height="20"/>
+                <TextBlock x:Name="RunningText"
+                           Text="Running… fetching orders"
+                           FontSize="13"
+                           VerticalAlignment="Center"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="1"
+                          x:Name="LiveLogScroller"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Auto">
+                <TextBlock x:Name="LogText"
+                           FontFamily="Cascadia Code, Consolas, Courier New"
+                           FontSize="12"
+                           TextWrapping="NoWrap"
+                           IsTextSelectionEnabled="True"
+                           Padding="12"/>
+            </ScrollViewer>
+        </Grid>
 
         <!-- ── Structured results (shown when not running) ────────────── -->
         <ScrollViewer Grid.Row="1"
@@ -68,26 +104,52 @@
                             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1" CornerRadius="6"
-                                    Padding="12,8" Margin="0,2"
+                                    Padding="8,4" Margin="0,2"
                                     Tapped="ProcessedRow_Tapped">
-                                <Grid ColumnDefinitions="24,*,72,160,Auto">
-                                    <TextBlock Grid.Column="0"
+                                <Grid ColumnDefinitions="36,24,*,72,160,Auto,Auto">
+                                    <CheckBox Grid.Column="0"
+                                              IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                                              Click="RowCheckBox_Click"
+                                              VerticalAlignment="Center"
+                                              Tapped="CheckBox_Tapped"/>
+                                    <TextBlock Grid.Column="1"
                                                Text="{x:Bind StatusIcon}"
                                                Foreground="{x:Bind StatusColor}"
                                                FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
+                                    <TextBlock Grid.Column="2"
                                                Text="{x:Bind Product}"
                                                FontSize="12" VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Grid.Column="2"
+                                    <TextBlock Grid.Column="3"
                                                Text="{x:Bind Size}"
                                                FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="3"
+                                    <TextBlock Grid.Column="4"
                                                Text="{x:Bind File}"
                                                FontSize="11" VerticalAlignment="Center"
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                                TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Grid.Column="4"
+                                    <!-- Sent to CadLink badge -->
+                                    <Border Grid.Column="5"
+                                            Visibility="{x:Bind SentBadgeVisibility, Mode=OneWay}"
+                                            Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                            BorderBrush="{ThemeResource SystemFillColorSuccessBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="10"
+                                            Padding="8,2"
+                                            VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="&#xE73E;"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="10"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                                            <TextBlock Text="Sent"
+                                                       FontSize="11"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Grid.Column="6"
                                                Text="{x:Bind OrderId}"
                                                FontSize="11" VerticalAlignment="Center"
                                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
@@ -136,6 +198,60 @@
                                             Height="28" FontSize="11"
                                             Tag="{x:Bind}"
                                             Click="UnmappedMapBtn_Click"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── Already sent (skipped to avoid re-printing) ─────────── -->
+                <TextBlock x:Name="AlreadySentHeader"
+                           Text="ALREADY SENT"
+                           FontSize="10" FontWeight="SemiBold"
+                           CharacterSpacing="50"
+                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                           Margin="12,12,0,2"
+                           Visibility="Collapsed"/>
+
+                <ItemsControl ItemsSource="{x:Bind AlreadySentRows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:OrderRow">
+                            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1" CornerRadius="6"
+                                    Padding="12,6" Margin="0,2"
+                                    Opacity="0.8"
+                                    Tapped="ProcessedRow_Tapped">
+                                <Grid ColumnDefinitions="24,*,72,Auto,Auto">
+                                    <TextBlock Grid.Column="0"
+                                               Text="&#xE73E;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               Foreground="{ThemeResource SystemFillColorSuccessBrush}"
+                                               FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{x:Bind Product}"
+                                               FontSize="12" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{x:Bind Size}"
+                                               FontSize="12" VerticalAlignment="Center"/>
+                                    <!-- Sent to CadLink badge -->
+                                    <Border Grid.Column="3"
+                                            Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}"
+                                            BorderBrush="{ThemeResource SystemFillColorSuccessBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="10"
+                                            Padding="8,2"
+                                            VerticalAlignment="Center">
+                                        <TextBlock Text="Sent"
+                                                   FontSize="11"
+                                                   Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="4"
+                                               Text="{x:Bind OrderId}"
+                                               FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               Margin="12,0,0,0"/>
                                 </Grid>
                             </Border>
                         </DataTemplate>

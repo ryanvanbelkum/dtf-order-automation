@@ -86,7 +86,7 @@
                                     Content="Browse…"
                                     Height="28" FontSize="11"
                                     HorizontalAlignment="Stretch"
-                                    Tag="{x:Bind ProductName}"
+                                    Tag="{x:Bind}"
                                     Click="BrowseBtn_Click"/>
                         </Grid>
                     </Border>

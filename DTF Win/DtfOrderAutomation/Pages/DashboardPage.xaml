@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="24,20,24,24" Spacing="12" MaxWidth="640">
+        <StackPanel Padding="24,20,24,24" Spacing="12" MaxWidth="1080" HorizontalAlignment="Stretch">
 
             <!-- ── Status / Run button ───────────────────────────────────── -->
             <Button x:Name="RunBtn"
@@ -19,87 +19,152 @@
                 </StackPanel>
             </Button>
 
-            <!-- ── Last Run ──────────────────────────────────────────────── -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="20,16">
-                <StackPanel Spacing="4">
-                    <TextBlock Text="LAST RUN"
-                               FontSize="10" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                               CharacterSpacing="50"/>
-                    <TextBlock x:Name="LastRunTime"
-                               Text="Never"
-                               FontSize="14" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="LastRunSummary"
-                               Text="No runs yet"
-                               FontSize="12"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </Border>
+            <!-- ── All-Time Stat Tiles ───────────────────────────────────── -->
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="12">
 
-            <!-- ── All-Time Stats ────────────────────────────────────────── -->
-            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="20,16">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="ALL-TIME STATISTICS"
-                               FontSize="10" FontWeight="SemiBold"
-                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                               CharacterSpacing="50"/>
-                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="8">
-                        <!-- Total Runs -->
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock x:Name="StatTotalRuns"
-                                       Text="0"
-                                       FontSize="22" FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
-                            <TextBlock Text="Runs"
-                                       FontSize="11"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       HorizontalAlignment="Center"/>
+                <Border Grid.Column="0"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="20,16">
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="StatTotalRuns" Text="0"
+                                   FontSize="28" FontWeight="SemiBold"/>
+                        <TextBlock Text="Runs" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="20,16">
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="StatTotalOrders" Text="0"
+                                   FontSize="28" FontWeight="SemiBold"/>
+                        <TextBlock Text="Orders Processed" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="20,16">
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="StatTotalFiles" Text="0"
+                                   FontSize="28" FontWeight="SemiBold"/>
+                        <TextBlock Text="Files Sent" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="3"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="20,16">
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="StatTotalSkipped" Text="0"
+                                   FontSize="28" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                        <TextBlock Text="Skipped" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- ── Recent Activity chart + Last Run ──────────────────────── -->
+            <Grid ColumnDefinitions="2*,*" ColumnSpacing="12">
+
+                <!-- Recent Activity chart -->
+                <Border Grid.Column="0"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="20,16">
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="RECENT ACTIVITY"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       CharacterSpacing="50"/>
+                            <TextBlock Text="Orders per run — last 14 runs"
+                                       FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
-                        <!-- Total Orders -->
-                        <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock x:Name="StatTotalOrders"
-                                       Text="0"
-                                       FontSize="22" FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
-                            <TextBlock Text="Orders"
-                                       FontSize="11"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       HorizontalAlignment="Center"/>
+
+                        <!-- Chart area (bars built in code-behind) -->
+                        <Grid Height="190">
+                            <TextBlock x:Name="ChartEmpty"
+                                       Text="No activity yet — run an order fetch to see your trend."
+                                       FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"/>
+                            <Grid x:Name="ChartGrid" Visibility="Collapsed"/>
+                        </Grid>
+
+                        <!-- Legend -->
+                        <StackPanel x:Name="ChartLegend"
+                                    Orientation="Horizontal" Spacing="16"
+                                    Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <Border Width="10" Height="10" CornerRadius="2"
+                                        Background="{ThemeResource AccentFillColorDefaultBrush}"/>
+                                <TextBlock Text="Processed" FontSize="11"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <Border Width="10" Height="10" CornerRadius="2"
+                                        Background="{ThemeResource SystemFillColorCautionBrush}"/>
+                                <TextBlock Text="Skipped" FontSize="11"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            </StackPanel>
                         </StackPanel>
-                        <!-- Total Files -->
-                        <StackPanel Grid.Column="2" Spacing="2">
-                            <TextBlock x:Name="StatTotalFiles"
-                                       Text="0"
-                                       FontSize="22" FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
-                            <TextBlock Text="Files Queued"
-                                       FontSize="11"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Last Run + success rate -->
+                <Border Grid.Column="1"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="20,16">
+                    <StackPanel Spacing="16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="LAST RUN"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       CharacterSpacing="50"/>
+                            <TextBlock x:Name="LastRunTime"
+                                       Text="Never"
+                                       FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="LastRunSummary"
+                                       Text="No runs yet"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
-                        <!-- Total Skipped -->
-                        <StackPanel Grid.Column="3" Spacing="2">
-                            <TextBlock x:Name="StatTotalSkipped"
-                                       Text="0"
-                                       FontSize="22" FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"/>
-                            <TextBlock Text="Skipped"
-                                       FontSize="11"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       HorizontalAlignment="Center"/>
+
+                        <Border Height="1"
+                                Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="SUCCESS RATE"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       CharacterSpacing="50"/>
+                            <TextBlock x:Name="StatSuccessPct"
+                                       Text="—"
+                                       FontSize="28" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="StatSuccessRate"
+                                       Text="No runs yet"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         </StackPanel>
-                    </Grid>
-                    <TextBlock x:Name="StatSuccessRate"
-                               Text=""
-                               FontSize="11"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               HorizontalAlignment="Center"/>
-                </StackPanel>
-            </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
 
         </StackPanel>
     </ScrollViewer>

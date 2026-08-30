@@ -7,7 +7,7 @@ namespace DtfOrderAutomation.Services;
 
 public class MappingService
 {
-    private static readonly string MappingPath = Path.Combine(
+    public static readonly string MappingPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DtfOrderAutomation", "dtf_mapping.json");
 

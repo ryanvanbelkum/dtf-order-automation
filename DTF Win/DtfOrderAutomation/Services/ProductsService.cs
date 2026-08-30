@@ -13,7 +13,7 @@ namespace DtfOrderAutomation.Services;
 /// </summary>
 public class ProductsService
 {
-    private static readonly string ProductsPath = Path.Combine(
+    public static readonly string ProductsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DtfOrderAutomation", "dtf_products.json");
 

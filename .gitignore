@@ -30,6 +30,9 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Claude Code local state (settings, worktrees)
+.claude/
+
 # App data files (user-specific, not for source control)
 dtf_config.json
 dtf_log.json

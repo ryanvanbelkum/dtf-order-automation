@@ -8,7 +8,7 @@ namespace DtfOrderAutomation.Services;
 
 public class LogService
 {
-    private static readonly string LogPath = Path.Combine(
+    public static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DtfOrderAutomation", "dtf_log.json");
 

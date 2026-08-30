@@ -17,6 +17,8 @@ namespace DtfOrderAutomation.Pages;
 
 public class MappingItem : INotifyPropertyChanged
 {
+    /// <summary>Shopify product ID — used as the mapping key. Empty for legacy title-keyed entries.</summary>
+    public string  ProductId   { get; set; } = "";
     public string  ProductName { get; set; } = "";
     public string? ImageUrl    { get; set; }
 
@@ -71,11 +73,26 @@ public sealed partial class MappingPage : Page
 
         _allItems.Clear();
         App.State.ProductImages.Clear();
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in cached)
         {
-            _mapping.TryGetValue(p.Title, out var file);
-            _allItems.Add(new MappingItem { ProductName = p.Title, DesignFile = file ?? "", ImageUrl = p.ImageUrl });
+            // Prefer keying by product ID; fall back to title for products without an ID
+            var key = string.IsNullOrEmpty(p.Id) ? p.Title : p.Id;
+            // Also check the old title-based key so legacy mappings surface correctly
+            if (!_mapping.TryGetValue(key, out var file) || string.IsNullOrEmpty(file))
+                _mapping.TryGetValue(p.Title, out file);
+            _allItems.Add(new MappingItem { ProductId = p.Id, ProductName = p.Title, DesignFile = file ?? "", ImageUrl = p.ImageUrl });
             App.State.ProductImages[p.Title] = p.ImageUrl;
+            seenKeys.Add(key);
+            seenKeys.Add(p.Title);
+        }
+
+        // Surface any mapping entries whose keys don't match any known product
+        // (e.g. title-keyed entries saved before product IDs were introduced)
+        foreach (var kv in _mapping)
+        {
+            if (!seenKeys.Contains(kv.Key) && !string.IsNullOrEmpty(kv.Value))
+                _allItems.Add(new MappingItem { ProductName = kv.Key, DesignFile = kv.Value });
         }
 
         SearchBox.IsEnabled         = true;
@@ -107,11 +124,23 @@ public sealed partial class MappingPage : Page
 
         _allItems.Clear();
         App.State.ProductImages.Clear();
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in products)
         {
-            _mapping.TryGetValue(p.Title, out var file);
-            _allItems.Add(new MappingItem { ProductName = p.Title, DesignFile = file ?? "", ImageUrl = p.ImageUrl });
+            var key = string.IsNullOrEmpty(p.Id) ? p.Title : p.Id;
+            if (!_mapping.TryGetValue(key, out var file) || string.IsNullOrEmpty(file))
+                _mapping.TryGetValue(p.Title, out file);
+            _allItems.Add(new MappingItem { ProductId = p.Id, ProductName = p.Title, DesignFile = file ?? "", ImageUrl = p.ImageUrl });
             App.State.ProductImages[p.Title] = p.ImageUrl;
+            seenKeys.Add(key);
+            seenKeys.Add(p.Title);
+        }
+
+        // Surface any mapping entries whose keys don't match any known product
+        foreach (var kv in _mapping)
+        {
+            if (!seenKeys.Contains(kv.Key) && !string.IsNullOrEmpty(kv.Value))
+                _allItems.Add(new MappingItem { ProductName = kv.Key, DesignFile = kv.Value });
         }
 
         App.ProductsService.Save(products);
@@ -155,7 +184,8 @@ public sealed partial class MappingPage : Page
 
     private async void BrowseBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button btn || btn.Tag is not string productName) return;
+        if (sender is not Button btn || btn.Tag is not MappingItem tagItem) return;
+        var productName = tagItem.ProductName;
 
         var picker = new FileOpenPicker();
         WinRT.Interop.InitializeWithWindow.Initialize(picker, App.WindowHandle);
@@ -176,8 +206,9 @@ public sealed partial class MappingPage : Page
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
 
-        // Update in-memory model
-        _mapping[productName] = file.Name;
+        // Update in-memory model — key by product ID when available, otherwise title
+        var key = string.IsNullOrEmpty(tagItem.ProductId) ? productName : tagItem.ProductId;
+        _mapping[key] = file.Name;
         var item = _allItems.FirstOrDefault(i => i.ProductName == productName);
         if (item is not null) item.DesignFile = file.Name;
 
@@ -188,18 +219,19 @@ public sealed partial class MappingPage : Page
 
     private async void SaveBtn_Click(object sender, RoutedEventArgs e)
     {
-        // Pull current DesignFile values back into the dictionary
+        // Pull current DesignFile values back into the dictionary, keyed by product ID when available
         foreach (var item in _allItems)
         {
+            var key = string.IsNullOrEmpty(item.ProductId) ? item.ProductName : item.ProductId;
             if (!string.IsNullOrEmpty(item.DesignFile))
-                _mapping[item.ProductName] = item.DesignFile;
+                _mapping[key] = item.DesignFile;
             else
-                _mapping.Remove(item.ProductName);
+                _mapping.Remove(key);
         }
 
         App.MappingService.Save(_mapping);
 
-        var mapped = _mapping.Count(kv => !string.IsNullOrEmpty(kv.Value));
+        var mapped = _allItems.Count(i => i.IsMapped);
         var dialog = new ContentDialog
         {
             Title           = "Saved",

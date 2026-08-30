@@ -134,7 +134,8 @@ public class ShopifyService : IDisposable
                     }
                 }
 
-                products.Add(new ShopifyProduct { Title = t.GetString() ?? "", ImageUrl = imageUrl });
+                var id = p.TryGetProperty("id", out var idProp) ? idProp.GetRawText() : "";
+                products.Add(new ShopifyProduct { Id = id, Title = t.GetString() ?? "", ImageUrl = imageUrl });
             }
 
             // Follow Link header for pagination
