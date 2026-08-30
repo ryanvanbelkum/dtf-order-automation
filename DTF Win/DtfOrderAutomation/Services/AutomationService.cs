@@ -140,11 +140,13 @@ public class AutomationService
                 if (string.IsNullOrEmpty(designFile))
                 {
                     // Log with full name so user can see the variant, but store title as Product
-                    // so it matches what the Mapping tab shows
-                    log($"  ⚠ {productName} ({size}) — not in mapping, skipped");
+                    // so it matches what the Mapping tab shows. Include the raw product_id
+                    // Shopify sent so a mismatch against the Mapping tab's saved key is
+                    // immediately visible without digging through dtf_mapping.json by hand.
+                    var idNote = string.IsNullOrEmpty(productId) ? "no product_id on this line item" : $"product_id: {productId}";
+                    log($"  ⚠ {productName} ({size}) — not in mapping ({idNote}), skipped");
                     result.Skipped++;
-                    result.SkippedDetails.Add(new() { OrderId = orderId, Reason = $"'{productTitle}' not in mapping" });
-                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = productId, Product = productTitle, Size = size, Status = "skipped" });
+                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = productId, Product = $"{productTitle} — not in mapping ({idNote})", Size = size, Status = "skipped" });
                     continue;
                 }
 
@@ -158,8 +160,7 @@ public class AutomationService
                 {
                     log($"  ⚠ {productName} ({size}) — design file not found: {designFile}");
                     result.Skipped++;
-                    result.SkippedDetails.Add(new() { OrderId = orderId, Reason = $"Design file not found: {designFile}" });
-                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = productId, Product = productTitle, Size = size, Status = "skipped", File = designFile });
+                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = productId, Product = $"{productTitle} — design file not found", Size = size, Status = "skipped", File = designFile });
                     continue;
                 }
 
