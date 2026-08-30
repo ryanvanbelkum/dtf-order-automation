@@ -38,17 +38,24 @@
     </None>
   </ItemGroup>
 
-  <!-- Windows App SDK 1.8 regression: compiled XAML (.xbf) files land in the regular
-       build output but are dropped from `dotnet publish` output for unpackaged apps,
-       causing XamlParseException at runtime (LoadComponent can't find the page markup).
-       See https://github.com/microsoft/microsoft-ui-xaml/issues/10803. Copy them over
+  <!-- Windows App SDK 1.8 regression: compiled XAML (.xbf) files and the app's own
+       resource index (DtfOrderAutomation.pri) land in the regular build output but are
+       dropped from `dotnet publish` output for unpackaged apps. Missing .xbf causes
+       XamlParseException loading page markup; missing .pri causes XamlParseException
+       resolving ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml (the app has no
+       resource map to route framework theme resources through). See
+       https://github.com/microsoft/microsoft-ui-xaml/issues/10803. Copy both over
        manually until the SDK fixes it. -->
-  <Target Name="CopyXbfToPublishDir" AfterTargets="Publish">
+  <Target Name="CopyGeneratedXamlResourcesToPublishDir" AfterTargets="Publish">
     <ItemGroup>
       <XbfFiles Include="$(OutDir)**\*.xbf" />
+      <PriFiles Include="$(OutDir)*.pri" />
     </ItemGroup>
     <Copy SourceFiles="@(XbfFiles)"
           DestinationFiles="@(XbfFiles->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(PriFiles)"
+          DestinationFolder="$(PublishDir)"
           SkipUnchangedFiles="true" />
   </Target>
 
