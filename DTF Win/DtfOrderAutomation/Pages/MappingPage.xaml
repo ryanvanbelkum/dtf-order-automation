@@ -71,11 +71,16 @@
                             BorderThickness="1" CornerRadius="6"
                             Padding="12,8" Margin="0,2">
                         <Grid ColumnDefinitions="*,220,96">
-                            <TextBlock Grid.Column="0"
-                                       Text="{x:Bind ProductName}"
-                                       FontSize="12"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="{x:Bind ProductName}"
+                                           FontSize="12"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{x:Bind ProductIdText}"
+                                           FontSize="10"
+                                           Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                           Visibility="{x:Bind HasProductId}"
+                                           IsTextSelectionEnabled="True"/>
+                            </StackPanel>
                             <TextBlock Grid.Column="1"
                                        Text="{x:Bind DisplayFile}"
                                        FontSize="11"

@@ -116,10 +116,16 @@
                                                Text="{x:Bind StatusIcon}"
                                                Foreground="{x:Bind StatusColor}"
                                                FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="2"
-                                               Text="{x:Bind Product}"
-                                               FontSize="12" VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Product}"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{x:Bind ProductIdText}"
+                                                   FontSize="10"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                   Visibility="{x:Bind HasProductId}"
+                                                   IsTextSelectionEnabled="True"/>
+                                    </StackPanel>
                                     <TextBlock Grid.Column="3"
                                                Text="{x:Bind Size}"
                                                FontSize="12" VerticalAlignment="Center"/>
@@ -150,8 +156,8 @@
                                         </StackPanel>
                                     </Border>
                                     <TextBlock Grid.Column="6"
-                                               Text="{x:Bind OrderId}"
-                                               FontSize="11" VerticalAlignment="Center"
+                                               Text="{x:Bind OrderLabel}"
+                                               FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
                                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                Margin="12,0,0,0"/>
                                 </Grid>
@@ -181,16 +187,22 @@
                                                Text="⚠"
                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                                FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind Product}"
-                                               FontSize="12" VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Product}"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{x:Bind ProductIdText}"
+                                                   FontSize="10"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                   Visibility="{x:Bind HasProductId}"
+                                                   IsTextSelectionEnabled="True"/>
+                                    </StackPanel>
                                     <TextBlock Grid.Column="2"
                                                Text="{x:Bind Size}"
                                                FontSize="12" VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="3"
-                                               Text="{x:Bind OrderId}"
-                                               FontSize="11" VerticalAlignment="Center"
+                                               Text="{x:Bind OrderLabel}"
+                                               FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
                                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                Margin="0,0,12,0"/>
                                     <Button Grid.Column="4"
@@ -228,10 +240,16 @@
                                                FontFamily="Segoe MDL2 Assets"
                                                Foreground="{ThemeResource SystemFillColorSuccessBrush}"
                                                FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="1"
-                                               Text="{x:Bind Product}"
-                                               FontSize="12" VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{x:Bind Product}"
+                                                   FontSize="12"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{x:Bind ProductIdText}"
+                                                   FontSize="10"
+                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                   Visibility="{x:Bind HasProductId}"
+                                                   IsTextSelectionEnabled="True"/>
+                                    </StackPanel>
                                     <TextBlock Grid.Column="2"
                                                Text="{x:Bind Size}"
                                                FontSize="12" VerticalAlignment="Center"/>
@@ -248,8 +266,8 @@
                                                    Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
                                     </Border>
                                     <TextBlock Grid.Column="4"
-                                               Text="{x:Bind OrderId}"
-                                               FontSize="11" VerticalAlignment="Center"
+                                               Text="{x:Bind OrderLabel}"
+                                               FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
                                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                Margin="12,0,0,0"/>
                                 </Grid>

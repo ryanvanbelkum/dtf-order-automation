@@ -30,6 +30,10 @@ public class OrderRow : INotifyPropertyChanged
     public string? File    { get; set; }
     public string  Status  { get; set; } = "";
 
+    public string OrderLabel     => $"Order {OrderId}";
+    public bool   HasProductId   => !string.IsNullOrEmpty(ProductId);
+    public string ProductIdText  => $"ID: {ProductId}";
+
     // Reference to the backing model — used by Send to CadLink
     public OrderDetail? SourceDetail { get; set; }
 

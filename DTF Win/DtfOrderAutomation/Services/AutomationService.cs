@@ -140,13 +140,13 @@ public class AutomationService
                 if (string.IsNullOrEmpty(designFile))
                 {
                     // Log with full name so user can see the variant, but store title as Product
-                    // so it matches what the Mapping tab shows. Include the raw product_id
-                    // Shopify sent so a mismatch against the Mapping tab's saved key is
-                    // immediately visible without digging through dtf_mapping.json by hand.
+                    // so it matches what the Mapping tab shows. The raw product_id is stored on
+                    // ProductId and shown as its own field in the UI, so a mismatch against the
+                    // Mapping tab's saved key is visible without digging through dtf_mapping.json.
                     var idNote = string.IsNullOrEmpty(productId) ? "no product_id on this line item" : $"product_id: {productId}";
                     log($"  ⚠ {productName} ({size}) — not in mapping ({idNote}), skipped");
                     result.Skipped++;
-                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = productId, Product = $"{productTitle} — not in mapping ({idNote})", Size = size, Status = "skipped" });
+                    result.OrderDetails.Add(new() { OrderId = orderId, ProductId = productId, Product = $"{productTitle} — not in mapping", Size = size, Status = "skipped" });
                     continue;
                 }
 

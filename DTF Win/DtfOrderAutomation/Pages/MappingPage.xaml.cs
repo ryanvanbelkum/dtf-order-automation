@@ -22,6 +22,9 @@ public class MappingItem : INotifyPropertyChanged
     public string  ProductName { get; set; } = "";
     public string? ImageUrl    { get; set; }
 
+    public bool   HasProductId  => !string.IsNullOrEmpty(ProductId);
+    public string ProductIdText => $"ID: {ProductId}";
+
     private string _designFile = "";
     public string DesignFile
     {
