@@ -38,4 +38,18 @@
     </None>
   </ItemGroup>
 
+  <!-- Windows App SDK 1.8 regression: compiled XAML (.xbf) files land in the regular
+       build output but are dropped from `dotnet publish` output for unpackaged apps,
+       causing XamlParseException at runtime (LoadComponent can't find the page markup).
+       See https://github.com/microsoft/microsoft-ui-xaml/issues/10803. Copy them over
+       manually until the SDK fixes it. -->
+  <Target Name="CopyXbfToPublishDir" AfterTargets="Publish">
+    <ItemGroup>
+      <XbfFiles Include="$(OutDir)**\*.xbf" />
+    </ItemGroup>
+    <Copy SourceFiles="@(XbfFiles)"
+          DestinationFiles="@(XbfFiles->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
