@@ -246,14 +246,47 @@ public sealed partial class LastRunPage : Page
         AddDetailRow(panel, "Size",    row.Size);
         AddDetailRow(panel, "File",    row.File ?? "—");
 
+        // Print dimensions default to our auto-calculated size, but the user
+        // can override them here before sending — locked once already sent
+        // since the file dropped in the hot folder can't be changed after the fact.
+        NumberBox? widthBox = null, heightBox = null;
+        bool canEditSize = row.SourceDetail != null && !row.Sent;
+        if (row.SourceDetail != null)
+        {
+            widthBox  = AddDimensionRow(panel, "Width (in)",  row.SourceDetail.PrintWidth,  canEditSize);
+            heightBox = AddDimensionRow(panel, "Height (in)", row.SourceDetail.PrintHeight, canEditSize);
+            if (!canEditSize)
+                panel.Children.Add(new TextBlock
+                {
+                    Text       = "Already sent to CadLink — dimensions locked.",
+                    FontSize   = 11,
+                    Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+                });
+        }
+
+        var scroller = new ScrollViewer
+        {
+            Content                     = panel,
+            MaxHeight                   = 480,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+
         var dialog = new ContentDialog
         {
-            Title           = "Order Details",
-            Content         = panel,
-            CloseButtonText = "Close",
-            XamlRoot        = XamlRoot,
+            Title             = "Order Details",
+            Content           = scroller,
+            PrimaryButtonText = canEditSize ? "Save" : "",
+            CloseButtonText   = "Close",
+            XamlRoot          = XamlRoot,
         };
-        await dialog.ShowAsync();
+        var result = await dialog.ShowAsync();
+
+        if (result == ContentDialogResult.Primary && row.SourceDetail != null && widthBox != null && heightBox != null)
+        {
+            if (widthBox.Value > 0)  row.SourceDetail.PrintWidth  = widthBox.Value;
+            if (heightBox.Value > 0) row.SourceDetail.PrintHeight = heightBox.Value;
+            App.LogService.Save(App.State.Log);
+        }
     }
 
     // Prevent checkbox clicks from bubbling up to the row's Tapped handler
@@ -427,6 +460,30 @@ public sealed partial class LastRunPage : Page
         row.Children.Add(new TextBlock { Text = label + ":", FontWeight = FontWeights.SemiBold, Width = 64 });
         row.Children.Add(new TextBlock { Text = value, TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(row);
+    }
+
+    private static NumberBox AddDimensionRow(StackPanel panel, string label, double value, bool enabled)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        row.Children.Add(new TextBlock
+        {
+            Text              = label + ":",
+            FontWeight        = FontWeights.SemiBold,
+            Width             = 64,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var box = new NumberBox
+        {
+            Value                    = value,
+            Minimum                  = 0.1,
+            SmallChange              = 0.1,
+            SpinButtonPlacementMode  = NumberBoxSpinButtonPlacementMode.Compact,
+            IsEnabled                = enabled,
+            Width                    = 110,
+        };
+        row.Children.Add(box);
+        panel.Children.Add(row);
+        return box;
     }
 
     // ── Clear ──────────────────────────────────────────────────────────────
