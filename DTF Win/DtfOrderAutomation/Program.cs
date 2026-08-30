@@ -11,6 +11,9 @@ internal class Program
     [STAThread]
     static void Main(string[] args)
     {
+        AppDomain.CurrentDomain.UnhandledException +=
+            (s, e) => DtfOrderAutomation.Services.CrashLogger.LogAndShow(e.ExceptionObject as Exception);
+
         // Bootstrap the Windows App SDK runtime for unpackaged apps (version 1.6.x)
         try
         {

@@ -27,6 +27,7 @@ public partial class App : Application
 
     public App()
     {
+        this.UnhandledException += (s, e) => Services.CrashLogger.LogAndShow(e.Exception);
         InitializeComponent();
     }
 
