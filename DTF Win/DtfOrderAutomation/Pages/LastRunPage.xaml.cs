@@ -274,10 +274,13 @@ public sealed partial class LastRunPage : Page
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
 
-        // Save mapping — key by product ID when available so it survives title changes
+        // Save mapping — key by product ID when available so it survives title changes.
+        // Store the full path, not just the filename: the picker can browse anywhere,
+        // and a bare filename only resolves correctly if the file sits directly in the
+        // Designs Folder's root. A full path works no matter where it actually lives.
         var mapping = App.MappingService.Load();
         var mappingKey = string.IsNullOrEmpty(row.ProductId) ? row.Product : row.ProductId;
-        mapping[mappingKey] = file.Name;
+        mapping[mappingKey] = file.Path;
         App.MappingService.Save(mapping);
 
         // Build source detail so this row can be sent to CadLink

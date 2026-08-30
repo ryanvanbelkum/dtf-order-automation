@@ -40,7 +40,13 @@ public class MappingItem : INotifyPropertyChanged
     }
 
     public bool   IsMapped    => !string.IsNullOrEmpty(DesignFile);
-    public string DisplayFile => IsMapped ? DesignFile : "Not mapped";
+
+    // DesignFile may be a full path (new mappings) or a bare filename that's
+    // resolved relative to the Designs Folder (legacy mappings) — show just the
+    // filename either way so the list stays readable.
+    public string DisplayFile => IsMapped
+        ? System.IO.Path.GetFileName(DesignFile)
+        : "Not mapped";
 
     public Brush FileColor => IsMapped
         ? (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"]
@@ -209,11 +215,14 @@ public sealed partial class MappingPage : Page
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
 
-        // Update in-memory model — key by product ID when available, otherwise title
+        // Store the full path, not just the filename — the picker lets you browse
+        // anywhere, including subfolders of the Designs Folder, and a bare filename
+        // only resolves correctly if the file sits directly in the Designs Folder's
+        // root. A full path works no matter where the file actually lives.
         var key = string.IsNullOrEmpty(tagItem.ProductId) ? productName : tagItem.ProductId;
-        _mapping[key] = file.Name;
+        _mapping[key] = file.Path;
         var item = _allItems.FirstOrDefault(i => i.ProductName == productName);
-        if (item is not null) item.DesignFile = file.Name;
+        if (item is not null) item.DesignFile = file.Path;
 
         ApplyFilter(); // refresh counts
     }
