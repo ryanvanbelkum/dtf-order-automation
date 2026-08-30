@@ -103,7 +103,13 @@ public class UpdateService : IDisposable
 
             var script =
                 "@echo off\r\n" +
-                "timeout /t 2 /nobreak >nul\r\n" +
+                // timeout.exe requires an interactive console and fails instantly
+                // ("Input redirection is not supported") when launched with no window,
+                // which is exactly how this script is started — collapsing the intended
+                // delay to zero and bringing back the file-lock race. ping against
+                // localhost is the standard no-console-needed way to sleep in a batch
+                // file; 3 pings ≈ 2 seconds.
+                "ping -n 3 127.0.0.1 >nul\r\n" +
                 $"\"{tempPath}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\n" +
                 "if %ERRORLEVEL% EQU 0 (\r\n" +
                 $"  start \"\" \"{appExe}\"\r\n" +
