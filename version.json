@@ -1,5 +1,5 @@
 {
-  "version": "0.0.8",
-  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.8/DTF.Setup.exe",
-  "release_notes": "Fixes auto-update by force-killing any lingering instance of the app before the installer runs, preventing stuck zombie processes from earlier failed updates. Also removes the minimize-to-tray behavior — closing the window now fully exits the app."
+  "version": "0.0.9",
+  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.9/DTF.Setup.exe",
+  "release_notes": "Fixes the dashboard layout so widgets center instead of pinning to a corner when the window is maximized."
 }
