@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using DtfOrderAutomation.Pages;
 using DtfOrderAutomation.Services;
@@ -10,27 +9,12 @@ namespace DtfOrderAutomation;
 
 public sealed partial class MainWindow : Window
 {
-    [DllImport("user32.dll")]
-    private static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    private readonly TrayIconService _tray;
-
     public MainWindow()
     {
         InitializeComponent();
 
-        // Minimize to tray instead of closing
-        Closed += (_, args) =>
-        {
-            args.Handled = true;
-            AppWindow.Hide();
-        };
-
-        // Set up tray icon
-        _tray = new TrayIconService(DispatcherQueue);
-        _tray.OpenRequested   += ShowWindow;
-        _tray.RunNowRequested += () => _ = App.RunAutomationAsync();
-        _tray.QuitRequested   += Quit;
+        // Fully exit when the window is closed.
+        Closed += (_, _) => Application.Current.Exit();
 
         // Subscribe to run state for status badge
         App.State.RunStateChanged += OnRunStateChanged;
@@ -67,27 +51,6 @@ public sealed partial class MainWindow : Window
             if (item.Tag?.ToString() == typeof(T).Name) { NavView.SelectedItem = item; return; }
         foreach (NavigationViewItem item in NavView.FooterMenuItems)
             if (item.Tag?.ToString() == typeof(T).Name) { NavView.SelectedItem = item; return; }
-    }
-
-    // ── Tray actions ───────────────────────────────────────────────────────
-
-    public void ShowWindow()
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            AppWindow.Show();
-            Activate();
-            SetForegroundWindow(App.WindowHandle);
-        });
-    }
-
-    private void Quit()
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            _tray.Dispose();
-            Application.Current.Exit();
-        });
     }
 
     // ── Status badge ───────────────────────────────────────────────────────
