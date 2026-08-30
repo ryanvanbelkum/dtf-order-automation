@@ -1,5 +1,5 @@
 {
-  "version": "0.0.7",
-  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.7/DTF.Setup.exe",
-  "release_notes": "Add settings export/import: back up your Shopify credentials, folder paths, and product mappings to a file and restore them on a new install. Also lets you fine-tune print width/height per order before sending to CadLink."
+  "version": "0.0.8",
+  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.8/DTF.Setup.exe",
+  "release_notes": "Fixes auto-update by force-killing any lingering instance of the app before the installer runs, preventing stuck zombie processes from earlier failed updates. Also removes the minimize-to-tray behavior — closing the window now fully exits the app."
 }
