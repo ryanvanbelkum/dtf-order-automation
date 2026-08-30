@@ -1,5 +1,5 @@
 {
-  "version": "0.0.5",
-  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.5/DTF.Setup.exe",
-  "release_notes": "Fixes design file mapping to store the full file path instead of just the filename, so mapped files resolve correctly regardless of which subfolder they're picked from."
+  "version": "0.0.6",
+  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.6/DTF.Setup.exe",
+  "release_notes": "Fixes auto-update silently failing: replaces timeout.exe (which errors out with no console attached) with a ping-based delay, and increases the pre-install wait for a safer margin against the file-lock race."
 }
