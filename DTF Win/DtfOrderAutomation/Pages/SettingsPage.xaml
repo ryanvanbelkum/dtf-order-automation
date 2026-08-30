@@ -104,6 +104,30 @@
                 </StackPanel>
             </Border>
 
+            <!-- Backup & Transfer -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="20,16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="BACKUP &amp; TRANSFER"
+                               FontSize="10" FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               CharacterSpacing="50"/>
+                    <TextBlock Text="Export your credentials, folder paths, and product mappings to a file so you can set up a new computer without redoing everything. The exported file contains your Shopify credentials in plain text — treat it like a password and don't share it or store it anywhere unsafe."
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"/>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Grid.Column="0" Content="Export Settings…"
+                                HorizontalAlignment="Stretch"
+                                Click="ExportBtn_Click"/>
+                        <Button Grid.Column="1" Content="Import Settings…"
+                                HorizontalAlignment="Stretch"
+                                Click="ImportBtn_Click"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <!-- Danger Zone -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="#CC3333"

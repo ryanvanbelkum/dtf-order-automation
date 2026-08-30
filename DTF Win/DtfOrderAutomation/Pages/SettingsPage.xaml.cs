@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using DtfOrderAutomation.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
@@ -48,6 +50,93 @@ public sealed partial class SettingsPage : Page
 
         var folder = await picker.PickSingleFolderAsync();
         return folder?.Path;
+    }
+
+    // ── Export / Import ────────────────────────────────────────────────────
+
+    private async void ExportBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileSavePicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, App.WindowHandle);
+        picker.SuggestedStartLocation = PickerLocationId.Desktop;
+        picker.FileTypeChoices.Add("DTF Settings Export", new List<string> { ".json" });
+        picker.SuggestedFileName = $"dtf-settings-export-{DateTime.Now:yyyy-MM-dd}";
+
+        var file = await picker.PickSaveFileAsync();
+        if (file is null) return;
+
+        var mapping = App.MappingService.Load();
+        var bundle = App.ExportImportService.BuildBundle(App.Config, mapping);
+        App.ExportImportService.Export(file.Path, bundle);
+
+        var dialog = new ContentDialog
+        {
+            Title           = "Exported",
+            Content         = "Settings and mappings exported successfully. Keep this file safe — it contains your Shopify credentials in plain text.",
+            CloseButtonText = "OK",
+            XamlRoot        = XamlRoot,
+        };
+        await dialog.ShowAsync();
+    }
+
+    private async void ImportBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, App.WindowHandle);
+        picker.SuggestedStartLocation = PickerLocationId.Desktop;
+        picker.FileTypeFilter.Add(".json");
+
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+
+        ExportBundle bundle;
+        try
+        {
+            bundle = App.ExportImportService.Import(file.Path);
+        }
+        catch (Exception ex)
+        {
+            var errorDialog = new ContentDialog
+            {
+                Title           = "Import Failed",
+                Content         = $"Couldn't read this file: {ex.Message}",
+                CloseButtonText = "OK",
+                XamlRoot        = XamlRoot,
+            };
+            await errorDialog.ShowAsync();
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title             = "Import Settings?",
+            Content           = "This will overwrite your current credentials, folder paths, and product mappings with the ones in this file. This cannot be undone.",
+            PrimaryButtonText = "Import",
+            CloseButtonText   = "Cancel",
+            XamlRoot          = XamlRoot,
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        App.Config.ShopifyStoreUrl     = bundle.Config.ShopifyStoreUrl;
+        App.Config.ShopifyClientId     = bundle.Config.ShopifyClientId;
+        App.Config.ShopifyClientSecret = bundle.Config.ShopifyClientSecret;
+        App.Config.ShopifyToken        = "";
+        App.Config.ShopifyTokenExpiry  = "";
+        App.Config.DesignsFolder       = bundle.Config.DesignsFolder;
+        App.Config.HotFolder           = bundle.Config.HotFolder;
+        App.ConfigService.Save(App.Config);
+        App.MappingService.Save(bundle.Mapping);
+
+        OnLoaded(this, e);
+
+        var done = new ContentDialog
+        {
+            Title           = "Import Complete",
+            Content         = "Settings and mappings have been imported.",
+            CloseButtonText = "OK",
+            XamlRoot        = XamlRoot,
+        };
+        await done.ShowAsync();
     }
 
     // ── Reset All App Data ─────────────────────────────────────────────────

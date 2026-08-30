@@ -16,6 +16,7 @@ public partial class App : Application
     public static LogService       LogService       { get; } = new();
     public static MappingService   MappingService   { get; } = new();
     public static ProductsService  ProductsService  { get; } = new();
+    public static ExportImportService ExportImportService { get; } = new();
     public static ShopifyService   ShopifyService   { get; private set; } = null!;
     public static AutomationService AutomationService { get; private set; } = null!;
     public static UpdateService    UpdateService    { get; } = new();
