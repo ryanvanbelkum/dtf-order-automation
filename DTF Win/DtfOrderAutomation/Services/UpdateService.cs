@@ -101,18 +101,25 @@ public class UpdateService : IDisposable
             var logPath = Path.Combine(dataDir, "update.log");
             var batPath = Path.Combine(Path.GetTempPath(), "dtf_update.bat");
 
+            var appName = Path.GetFileName(appExe);
             var script =
                 "@echo off\r\n" +
+                // A longer delay alone didn't fix Inno Setup exit code 5 ("fatal error
+                // during installation" — returned when it can't overwrite a locked
+                // file), which means it isn't just about this process's own shutdown
+                // timing: a zombie DtfOrderAutomation.exe left over from an earlier
+                // failed update attempt can sit there indefinitely, holding the same
+                // lock, and no amount of waiting on THIS run fixes that. Force-kill any
+                // instance by name first so a pile of prior failures can't block this
+                // one. /T also kills child processes; errors ignored since there may be
+                // nothing to kill.
+                $"taskkill /F /IM \"{appName}\" /T >nul 2>&1\r\n" +
                 // timeout.exe requires an interactive console and fails instantly
                 // ("Input redirection is not supported") when launched with no window,
-                // which is exactly how this script is started — collapsing the intended
-                // delay to zero and bringing back the file-lock race (confirmed: Inno
-                // Setup exit code 5, "fatal error during installation", is exactly what
-                // it returns when it can't overwrite a locked file). ping against
-                // localhost is the standard no-console-needed way to sleep in a batch
-                // file; 6 pings ≈ 5 seconds — generous margin since WinUI3 shutdown
-                // timing isn't precisely predictable.
-                "ping -n 6 127.0.0.1 >nul\r\n" +
+                // which is exactly how this script is started. ping against localhost
+                // is the standard no-console-needed way to sleep in a batch file; a
+                // short buffer after the taskkill for the OS to finish releasing handles.
+                "ping -n 3 127.0.0.1 >nul\r\n" +
                 $"\"{tempPath}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\n" +
                 "if %ERRORLEVEL% EQU 0 (\r\n" +
                 $"  start \"\" \"{appExe}\"\r\n" +
