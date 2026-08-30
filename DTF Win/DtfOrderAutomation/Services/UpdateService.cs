@@ -87,17 +87,36 @@ public class UpdateService : IDisposable
 
         if (ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) && appExe is not null)
         {
-            // Run the installer silently, then relaunch the (overwritten) app.
-            // Chained via cmd so the relaunch happens only after the installer exits,
-            // and detached so it survives this process closing.
-            var command =
-                $"\"{tempPath}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART " +
-                $"&& start \"\" \"{appExe}\"";
+            // Run the installer silently, then relaunch the (overwritten) app. This runs
+            // via a small helper script rather than a single chained `cmd /c "a && b"`
+            // string: with multiple nested quoted paths, cmd's quote handling for that
+            // pattern is unreliable and can silently do nothing. A short delay is also
+            // needed before the install step — this process may not have fully released
+            // its file locks on the exe/DLLs by the time Application.Exit() returns,
+            // which would otherwise make the installer fail to overwrite them.
+            var dataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DtfOrderAutomation");
+            Directory.CreateDirectory(dataDir);
+            var logPath = Path.Combine(dataDir, "update.log");
+            var batPath = Path.Combine(Path.GetTempPath(), "dtf_update.bat");
+
+            var script =
+                "@echo off\r\n" +
+                "timeout /t 2 /nobreak >nul\r\n" +
+                $"\"{tempPath}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\n" +
+                "if %ERRORLEVEL% EQU 0 (\r\n" +
+                $"  start \"\" \"{appExe}\"\r\n" +
+                ") else (\r\n" +
+                $"  echo %date% %time% - update install failed, exit code %ERRORLEVEL% >> \"{logPath}\"\r\n" +
+                ")\r\n" +
+                "del \"%~f0\"\r\n";
+            File.WriteAllText(batPath, script);
 
             Process.Start(new ProcessStartInfo
             {
                 FileName        = "cmd.exe",
-                Arguments       = $"/c \"{command}\"",
+                ArgumentList    = { "/c", batPath },
                 UseShellExecute = false,
                 CreateNoWindow  = true,
             });
