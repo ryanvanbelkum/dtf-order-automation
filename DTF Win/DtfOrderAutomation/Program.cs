@@ -1,7 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
-using Microsoft.Windows.ApplicationModel.DynamicDependency;
 
 internal class Program
 {
@@ -14,20 +13,14 @@ internal class Program
         AppDomain.CurrentDomain.UnhandledException +=
             (s, e) => DtfOrderAutomation.Services.CrashLogger.LogAndShow(e.ExceptionObject as Exception);
 
-        // Bootstrap the Windows App SDK runtime for unpackaged apps (version 1.6.x)
-        try
-        {
-            Bootstrap.Initialize(0x00010008); // minimum Windows App SDK 1.8
-        }
-        catch (Exception ex)
-        {
-            MessageBox(IntPtr.Zero,
-                $"Could not initialize Windows App SDK 1.8.\n\n{ex.Message}\n\n" +
-                "Make sure the Windows App SDK runtime is installed.",
-                "DTF Order Automation — Startup Error", 0x10);
-            return;
-        }
-
+        // No Bootstrap.Initialize() call: this app is self-contained
+        // (WindowsAppSDKSelfContained=true, WindowsPackageType=None, OutputType=WinExe),
+        // so the Windows App SDK auto-initializes UndockedRegFreeWinRT support at startup.
+        // Bootstrap.Initialize() is for framework-dependent deployment, where it looks for
+        // an installed/registered Windows App Runtime — on a dev machine with Visual
+        // Studio's WinAppSDK tooling that's present, so it quietly succeeds there, but on a
+        // clean machine it fails via an uncatchable STATUS_FAIL_FAST_EXCEPTION instead of a
+        // normal exception.
         try
         {
             WinRT.ComWrappersSupport.InitializeComWrappers();
@@ -42,10 +35,6 @@ internal class Program
         catch (Exception ex)
         {
             MessageBox(IntPtr.Zero, $"Fatal error:\n{ex}", "DTF Order Automation", 0x10);
-        }
-        finally
-        {
-            Bootstrap.Shutdown();
         }
     }
 }
