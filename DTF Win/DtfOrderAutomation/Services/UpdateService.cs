@@ -106,10 +106,13 @@ public class UpdateService : IDisposable
                 // timeout.exe requires an interactive console and fails instantly
                 // ("Input redirection is not supported") when launched with no window,
                 // which is exactly how this script is started — collapsing the intended
-                // delay to zero and bringing back the file-lock race. ping against
+                // delay to zero and bringing back the file-lock race (confirmed: Inno
+                // Setup exit code 5, "fatal error during installation", is exactly what
+                // it returns when it can't overwrite a locked file). ping against
                 // localhost is the standard no-console-needed way to sleep in a batch
-                // file; 3 pings ≈ 2 seconds.
-                "ping -n 3 127.0.0.1 >nul\r\n" +
+                // file; 6 pings ≈ 5 seconds — generous margin since WinUI3 shutdown
+                // timing isn't precisely predictable.
+                "ping -n 6 127.0.0.1 >nul\r\n" +
                 $"\"{tempPath}\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\n" +
                 "if %ERRORLEVEL% EQU 0 (\r\n" +
                 $"  start \"\" \"{appExe}\"\r\n" +
