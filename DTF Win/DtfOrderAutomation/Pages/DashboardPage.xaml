@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="24,20,24,24" Spacing="12" MaxWidth="1080" HorizontalAlignment="Stretch">
+        <StackPanel Padding="24,20,24,24" Spacing="12" MaxWidth="1080" HorizontalAlignment="Center">
 
             <!-- ── Status / Run button ───────────────────────────────────── -->
             <Button x:Name="RunBtn"
