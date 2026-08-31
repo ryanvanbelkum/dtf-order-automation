@@ -1,5 +1,5 @@
 {
-  "version": "0.0.9",
-  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.9/DTF.Setup.exe",
-  "release_notes": "Fixes the dashboard layout so widgets center instead of pinning to a corner when the window is maximized."
+  "version": "0.0.10",
+  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.10/DTF.Setup.exe",
+  "release_notes": "Dashboard widgets now grow to fill the window width instead of staying capped at a fixed size, with a consistent 30px edge margin."
 }
