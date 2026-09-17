@@ -66,7 +66,9 @@ public class ShopifyService : IDisposable
     public async Task<List<JsonElement>?> FetchOrdersAsync(
         AppConfig config,
         DateTime? from = null,
-        DateTime? to   = null)
+        DateTime? to   = null,
+        long? orderNumberFrom = null,
+        long? orderNumberTo   = null)
     {
         var store = config.ShopifyStoreUrl.Trim().TrimEnd('/');
         var token = await GetTokenAsync(config);
@@ -85,8 +87,22 @@ public class ShopifyService : IDisposable
         var resp = await _http.SendAsync(req);
         resp.EnsureSuccessStatusCode();
 
-        var data = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        return data.GetProperty("orders").EnumerateArray().ToList();
+        var data   = await resp.Content.ReadFromJsonAsync<JsonElement>();
+        var orders = data.GetProperty("orders").EnumerateArray().ToList();
+
+        // Shopify's REST API has no server-side order_number range filter, so
+        // narrow the fetched batch down to the requested range client-side.
+        if (orderNumberFrom.HasValue || orderNumberTo.HasValue)
+            orders = orders.Where(o =>
+            {
+                if (!o.TryGetProperty("order_number", out var n)) return false;
+                var num = n.GetInt64();
+                if (orderNumberFrom.HasValue && num < orderNumberFrom.Value) return false;
+                if (orderNumberTo.HasValue   && num > orderNumberTo.Value)   return false;
+                return true;
+            }).ToList();
+
+        return orders;
     }
 
     // ── Products ───────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -78,6 +79,19 @@ public sealed partial class LastRunPage : Page
     public ObservableCollection<OrderRow> UnmappedRows    { get; } = new();
     public ObservableCollection<OrderRow> AlreadySentRows { get; } = new();
 
+    // ── Column sorting (Product / Size / Order #) ───────────────────────────
+
+    private sealed class SortState
+    {
+        public string? Column;
+        public bool    Ascending = true;
+        public void Reset() { Column = null; Ascending = true; }
+    }
+
+    private readonly SortState _processedSort = new();
+    private readonly SortState _unmappedSort  = new();
+    private readonly SortState _sentSort      = new();
+
     public LastRunPage()
     {
         InitializeComponent();
@@ -153,35 +167,42 @@ public sealed partial class LastRunPage : Page
         ProcessedRows.Clear();
         UnmappedRows.Clear();
         AlreadySentRows.Clear();
+        ResetSortState();
         UpdateSelectionState();
 
         if (App.State.Log.Count == 0)
         {
             SummaryTimestamp.Text     = "No runs yet.";
-            SummaryOrders.Text        = "";
-            SummaryFiles.Text         = "";
-            SummarySkipped.Visibility    = Visibility.Collapsed;
+            SummaryOrderRange.Visibility = Visibility.Collapsed;
             ProcessedHeader.Visibility   = Visibility.Collapsed;
             UnmappedHeader.Visibility    = Visibility.Collapsed;
             AlreadySentHeader.Visibility = Visibility.Collapsed;
+            ProcessedSortBar.Visibility  = Visibility.Collapsed;
+            UnmappedSortBar.Visibility   = Visibility.Collapsed;
+            SentSortBar.Visibility       = Visibility.Collapsed;
             ShowResults();
             return;
         }
 
         var r = App.State.Log[^1];
 
-        SummaryTimestamp.Text = r.Timestamp;
-        SummaryOrders.Text    = $"{r.OrdersProcessed} orders";
-        SummaryFiles.Text     = $"{r.FilesSent} files sent to CadLink";
+        SummaryTimestamp.Text = FormatTimestamp(r.Timestamp);
 
-        if (r.Skipped > 0)
+        var orderNumbers = r.OrderDetails.Select(d => OrderSortKey(d.OrderId))
+            .Concat(r.SkippedDetails.Select(d => OrderSortKey(d.OrderId)))
+            .Where(n => n != long.MinValue)
+            .ToList();
+
+        if (orderNumbers.Count > 0)
         {
-            SummarySkipped.Text       = $"{r.Skipped} skipped";
-            SummarySkipped.Visibility = Visibility.Visible;
+            var min = orderNumbers.Min();
+            var max = orderNumbers.Max();
+            SummaryOrderRange.Text       = min == max ? $"Order #{min}" : $"Orders #{min}-{max}";
+            SummaryOrderRange.Visibility = Visibility.Visible;
         }
         else
         {
-            SummarySkipped.Visibility = Visibility.Collapsed;
+            SummaryOrderRange.Visibility = Visibility.Collapsed;
         }
 
         foreach (var o in r.OrderDetails)
@@ -218,6 +239,9 @@ public sealed partial class LastRunPage : Page
         ProcessedHeader.Visibility   = ProcessedRows.Count   > 0 ? Visibility.Visible : Visibility.Collapsed;
         UnmappedHeader.Visibility    = UnmappedRows.Count    > 0 ? Visibility.Visible : Visibility.Collapsed;
         AlreadySentHeader.Visibility = AlreadySentRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ProcessedSortBar.Visibility  = ProcessedRows.Count   > 0 ? Visibility.Visible : Visibility.Collapsed;
+        UnmappedSortBar.Visibility   = UnmappedRows.Count    > 0 ? Visibility.Visible : Visibility.Collapsed;
+        SentSortBar.Visibility       = AlreadySentRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         ShowResults();
     }
@@ -338,8 +362,10 @@ public sealed partial class LastRunPage : Page
         row.Status = "ok";
         ProcessedRows.Add(row);
 
-        ProcessedHeader.Visibility = Visibility.Visible;
-        UnmappedHeader.Visibility  = UnmappedRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ProcessedHeader.Visibility  = Visibility.Visible;
+        ProcessedSortBar.Visibility = Visibility.Visible;
+        UnmappedHeader.Visibility   = UnmappedRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        UnmappedSortBar.Visibility  = UnmappedRows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateSelectionState();
     }
 
@@ -349,17 +375,20 @@ public sealed partial class LastRunPage : Page
     {
         bool check = SelectAllCheck.IsChecked == true;
         foreach (var row in ProcessedRows) row.IsSelected = check;
-        SendToCadLinkBtn.IsEnabled = check && ProcessedRows.Count > 0;
+        UpdateSelectionState();
     }
 
     private void RowCheckBox_Click(object sender, RoutedEventArgs e) => UpdateSelectionState();
 
     private void UpdateSelectionState()
     {
-        bool any = ProcessedRows.Any(r => r.IsSelected);
-        bool all = ProcessedRows.Count > 0 && ProcessedRows.All(r => r.IsSelected);
+        bool any      = ProcessedRows.Any(r => r.IsSelected);
+        bool all      = ProcessedRows.Count > 0 && ProcessedRows.All(r => r.IsSelected);
+        int  selected = ProcessedRows.Count(r => r.IsSelected);
+
         SendToCadLinkBtn.IsEnabled = any;
         SelectAllCheck.IsChecked   = all;
+        SelectedCountText.Text     = selected == 1 ? "1 order selected" : $"{selected} orders selected";
     }
 
     // ── Send to CadLink ────────────────────────────────────────────────────
@@ -394,10 +423,7 @@ public sealed partial class LastRunPage : Page
 
             // Tally the files just queued onto the run being displayed
             if (filesSent > 0 && App.State.Log.Count > 0)
-            {
                 App.State.Log[^1].FilesSent += filesSent;
-                SummaryFiles.Text = $"{App.State.Log[^1].FilesSent} files sent to CadLink";
-            }
 
             // Persist the updated SentToCadLink flags + file count
             App.LogService.Save(App.State.Log);
@@ -493,14 +519,110 @@ public sealed partial class LastRunPage : Page
         ProcessedRows.Clear();
         UnmappedRows.Clear();
         AlreadySentRows.Clear();
+        ResetSortState();
         LogText.Text              = "";
         SummaryTimestamp.Text     = "";
-        SummaryOrders.Text        = "";
-        SummaryFiles.Text         = "";
-        SummarySkipped.Visibility    = Visibility.Collapsed;
+        SummaryOrderRange.Visibility = Visibility.Collapsed;
         ProcessedHeader.Visibility   = Visibility.Collapsed;
         UnmappedHeader.Visibility    = Visibility.Collapsed;
         AlreadySentHeader.Visibility = Visibility.Collapsed;
+        ProcessedSortBar.Visibility  = Visibility.Collapsed;
+        UnmappedSortBar.Visibility   = Visibility.Collapsed;
+        SentSortBar.Visibility       = Visibility.Collapsed;
         UpdateSelectionState();
+    }
+
+    // ── Column sorting ────────────────────────────────────────────────────
+
+    private void SortHeader_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not string tag) return;
+
+        var parts = tag.Split(':');
+        if (parts.Length != 2) return;
+
+        ObservableCollection<OrderRow> rows;
+        SortState state;
+        switch (parts[0])
+        {
+            case "processed": rows = ProcessedRows;   state = _processedSort; break;
+            case "unmapped":  rows = UnmappedRows;    state = _unmappedSort;  break;
+            case "sent":      rows = AlreadySentRows; state = _sentSort;      break;
+            default: return;
+        }
+
+        ApplySort(rows, state, parts[1]);
+        RefreshSortHeaderLabels();
+    }
+
+    private static void ApplySort(ObservableCollection<OrderRow> rows, SortState state, string column)
+    {
+        state.Ascending = state.Column == column ? !state.Ascending : true;
+        state.Column    = column;
+
+        IOrderedEnumerable<OrderRow> ordered = column switch
+        {
+            "product" => rows.OrderBy(r => r.Product, StringComparer.OrdinalIgnoreCase),
+            "size"    => rows.OrderBy(r => r.Size, StringComparer.OrdinalIgnoreCase),
+            "order"   => rows.OrderBy(r => OrderSortKey(r.OrderId)),
+            _         => rows.OrderBy(r => 0),
+        };
+
+        var sorted = state.Ascending ? ordered.ToList() : ordered.Reverse().ToList();
+
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            var currentIndex = rows.IndexOf(sorted[i]);
+            if (currentIndex != i) rows.Move(currentIndex, i);
+        }
+    }
+
+    private static long OrderSortKey(string orderId)
+    {
+        var digits = new string(orderId.Where(char.IsDigit).ToArray());
+        return long.TryParse(digits, out var n) ? n : long.MinValue;
+    }
+
+    // Run timestamps are recorded via DateTime.Now, so parsing them back
+    // renders in the local machine's (the user's) time zone automatically.
+    private static string FormatTimestamp(string raw)
+    {
+        if (!DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            return raw;
+
+        var datePart = dt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture);
+        var timePart = dt.ToString("h:mm", CultureInfo.InvariantCulture)
+                      + dt.ToString("tt", CultureInfo.InvariantCulture).ToLowerInvariant();
+        return $"{datePart} {timePart}";
+    }
+
+    private void ResetSortState()
+    {
+        _processedSort.Reset();
+        _unmappedSort.Reset();
+        _sentSort.Reset();
+        RefreshSortHeaderLabels();
+    }
+
+    private void RefreshSortHeaderLabels()
+    {
+        SetHeaderLabel(ProcessedSortProductBtn, "Product", _processedSort, "product");
+        SetHeaderLabel(ProcessedSortSizeBtn,    "Size",    _processedSort, "size");
+        SetHeaderLabel(ProcessedSortOrderBtn,   "Order #", _processedSort, "order");
+
+        SetHeaderLabel(UnmappedSortProductBtn, "Product", _unmappedSort, "product");
+        SetHeaderLabel(UnmappedSortSizeBtn,    "Size",    _unmappedSort, "size");
+        SetHeaderLabel(UnmappedSortOrderBtn,   "Order #", _unmappedSort, "order");
+
+        SetHeaderLabel(SentSortProductBtn, "Product", _sentSort, "product");
+        SetHeaderLabel(SentSortSizeBtn,    "Size",    _sentSort, "size");
+        SetHeaderLabel(SentSortOrderBtn,   "Order #", _sentSort, "order");
+    }
+
+    private static void SetHeaderLabel(Button btn, string label, SortState state, string column)
+    {
+        btn.Content = state.Column == column
+            ? $"{label} {(state.Ascending ? "▲" : "▼")}"
+            : label;
     }
 }

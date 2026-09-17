@@ -29,7 +29,9 @@ public class AutomationService
         CancellationToken ct              = default,
         DateTime? from                    = null,
         DateTime? to                      = null,
-        HashSet<string>? alreadyProcessed = null)
+        HashSet<string>? alreadyProcessed = null,
+        long? orderNumberFrom             = null,
+        long? orderNumberTo               = null)
     {
         var result = new RunResult { Timestamp = DateTime.Now.ToString("O"), Status = "success" };
 
@@ -43,7 +45,11 @@ public class AutomationService
         ct.ThrowIfCancellationRequested();
 
         // ── Fetch orders ──────────────────────────────────────────────────
-        if (from.HasValue)
+        if (orderNumberFrom.HasValue || orderNumberTo.HasValue)
+        {
+            log($"\nFetching orders from Shopify… (order #{orderNumberFrom} → #{orderNumberTo})");
+        }
+        else if (from.HasValue)
         {
             var toStr = to.HasValue ? to.Value.ToString("MMM d, h:mm tt") : "now";
             log($"\nFetching orders from Shopify… ({from.Value:MMM d, h:mm tt} → {toStr})");
@@ -56,7 +62,7 @@ public class AutomationService
         List<JsonElement>? orders;
         try
         {
-            orders = await _shopify.FetchOrdersAsync(config, from, to);
+            orders = await _shopify.FetchOrdersAsync(config, from, to, orderNumberFrom, orderNumberTo);
         }
         catch (Exception ex)
         {

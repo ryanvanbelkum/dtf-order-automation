@@ -9,6 +9,9 @@ public sealed partial class DateRangeDialog : ContentDialog
     public DateTime? From { get; private set; }
     public DateTime? To   { get; private set; }
 
+    public long? OrderNumberFrom { get; private set; }
+    public long? OrderNumberTo   { get; private set; }
+
     private DateTime? _lastRunTime;
 
     public DateRangeDialog(string? lastRun)
@@ -41,10 +44,13 @@ public sealed partial class DateRangeDialog : ContentDialog
 
     private void RadioChanged(object sender, RoutedEventArgs e)
     {
-        if (CustomPanel is null) return;
-        CustomPanel.Visibility = AllOrdersRadio.IsChecked == true || SinceLastRunRadio.IsChecked == true
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        if (CustomPanel is null || OrderNumberPanel is null) return;
+        CustomPanel.Visibility      = CustomRangeRadio.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        OrderNumberPanel.Visibility = OrderNumberRadio.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void Preset_Yesterday6pmToNow(object sender, RoutedEventArgs e)
@@ -78,6 +84,37 @@ public sealed partial class DateRangeDialog : ContentDialog
             To = ToDate.Date is { } td
                 ? td.DateTime.Date + ToTime.Time
                 : null;
+        }
+        else if (OrderNumberRadio.IsChecked == true)
+        {
+            From = null;
+            To   = null;
+            OrderNumberError.Visibility = Visibility.Collapsed;
+
+            var fromVal = OrderNumberFromBox.Value;
+            var toVal   = OrderNumberToBox.Value;
+
+            if (double.IsNaN(fromVal))
+            {
+                OrderNumberError.Text       = "Enter a starting order number.";
+                OrderNumberError.Visibility = Visibility.Visible;
+                args.Cancel = true;
+                return;
+            }
+
+            var from = (long)fromVal;
+            var to   = double.IsNaN(toVal) ? from : (long)toVal;
+
+            if (to < from)
+            {
+                OrderNumberError.Text       = "The \"to\" order number must be greater than or equal to the \"from\" order number.";
+                OrderNumberError.Visibility = Visibility.Visible;
+                args.Cancel = true;
+                return;
+            }
+
+            OrderNumberFrom = from;
+            OrderNumberTo   = to;
         }
         else // AllOrdersRadio
         {

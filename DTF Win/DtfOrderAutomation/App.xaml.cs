@@ -53,7 +53,11 @@ public partial class App : Application
 
     // ── Automation run ─────────────────────────────────────────────────────
 
-    public static async Task RunAutomationAsync(DateTime? from = null, DateTime? to = null)
+    public static async Task RunAutomationAsync(
+        DateTime? from = null,
+        DateTime? to = null,
+        long? orderNumberFrom = null,
+        long? orderNumberTo = null)
     {
         if (State.IsRunning) return;
 
@@ -76,7 +80,9 @@ public partial class App : Application
                 cts.Token,
                 from,
                 to,
-                alreadyProcessed);
+                alreadyProcessed,
+                orderNumberFrom,
+                orderNumberTo);
         }
         catch (OperationCanceledException)
         {

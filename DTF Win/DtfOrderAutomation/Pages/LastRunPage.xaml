@@ -7,13 +7,22 @@
     <Grid RowDefinitions="Auto,*" Padding="8">
 
         <!-- Toolbar -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-            <Button x:Name="ClearBtn" Content="Clear" Click="ClearBtn_Click"/>
-            <CheckBox x:Name="SelectAllCheck"
-                      Content="Select All"
-                      Click="SelectAllCheck_Click"
-                      VerticalAlignment="Center"/>
-            <Button x:Name="SendToCadLinkBtn"
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,8">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Button x:Name="ClearBtn" Content="Clear" Click="ClearBtn_Click"/>
+                <CheckBox x:Name="SelectAllCheck"
+                          Content="Select All"
+                          Click="SelectAllCheck_Click"
+                          VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Grid.Column="2"
+                       x:Name="SelectedCountText"
+                       FontSize="12"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       VerticalAlignment="Center"
+                       Margin="0,0,12,0"/>
+            <Button Grid.Column="3"
+                    x:Name="SendToCadLinkBtn"
                     IsEnabled="False"
                     Click="SendToCadLinkBtn_Click">
                 <StackPanel Orientation="Horizontal" Spacing="8">
@@ -24,7 +33,7 @@
                     <TextBlock x:Name="SendBtnText" Text="Send to CadLink"/>
                 </StackPanel>
             </Button>
-        </StackPanel>
+        </Grid>
 
         <!-- ── Live log (shown during an active run) ───────────────────── -->
         <Grid Grid.Row="1"
@@ -76,15 +85,9 @@
                                FontSize="12"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                VerticalAlignment="Center"/>
-                    <TextBlock x:Name="SummaryOrders"
+                    <TextBlock x:Name="SummaryOrderRange"
                                FontSize="12"
-                               VerticalAlignment="Center"/>
-                    <TextBlock x:Name="SummaryFiles"
-                               FontSize="12"
-                               VerticalAlignment="Center"/>
-                    <TextBlock x:Name="SummarySkipped"
-                               FontSize="12"
-                               Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                VerticalAlignment="Center"
                                Visibility="Collapsed"/>
                 </StackPanel>
@@ -98,6 +101,21 @@
                            Margin="12,4,0,2"
                            Visibility="Collapsed"/>
 
+                <Grid x:Name="ProcessedSortBar"
+                      ColumnDefinitions="36,24,*,72,160,90,150"
+                      Margin="8,0,0,4"
+                      Visibility="Collapsed">
+                    <Button Grid.Column="2" x:Name="ProcessedSortProductBtn" Content="Product" Tag="processed:product"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left"/>
+                    <Button Grid.Column="3" x:Name="ProcessedSortSizeBtn" Content="Size" Tag="processed:size"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left"/>
+                    <Button Grid.Column="6" x:Name="ProcessedSortOrderBtn" Content="Order #" Tag="processed:order"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left" Margin="12,0,0,0"/>
+                </Grid>
+
                 <ItemsControl ItemsSource="{x:Bind ProcessedRows}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="local:OrderRow">
@@ -106,7 +124,7 @@
                                     BorderThickness="1" CornerRadius="6"
                                     Padding="8,4" Margin="0,2"
                                     Tapped="ProcessedRow_Tapped">
-                                <Grid ColumnDefinitions="36,24,*,72,160,Auto,Auto">
+                                <Grid ColumnDefinitions="36,24,*,72,160,90,150">
                                     <CheckBox Grid.Column="0"
                                               IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
                                               Click="RowCheckBox_Click"
@@ -175,6 +193,21 @@
                            Margin="12,12,0,2"
                            Visibility="Collapsed"/>
 
+                <Grid x:Name="UnmappedSortBar"
+                      ColumnDefinitions="24,*,72,150,120"
+                      Margin="12,0,0,4"
+                      Visibility="Collapsed">
+                    <Button Grid.Column="1" x:Name="UnmappedSortProductBtn" Content="Product" Tag="unmapped:product"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left"/>
+                    <Button Grid.Column="2" x:Name="UnmappedSortSizeBtn" Content="Size" Tag="unmapped:size"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left"/>
+                    <Button Grid.Column="3" x:Name="UnmappedSortOrderBtn" Content="Order #" Tag="unmapped:order"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left"/>
+                </Grid>
+
                 <ItemsControl ItemsSource="{x:Bind UnmappedRows}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="local:OrderRow">
@@ -182,7 +215,7 @@
                                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1" CornerRadius="6"
                                     Padding="12,8" Margin="0,2">
-                                <Grid ColumnDefinitions="24,*,72,Auto,Auto">
+                                <Grid ColumnDefinitions="24,*,72,150,120">
                                     <TextBlock Grid.Column="0"
                                                Text="⚠"
                                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
@@ -225,6 +258,21 @@
                            Margin="12,12,0,2"
                            Visibility="Collapsed"/>
 
+                <Grid x:Name="SentSortBar"
+                      ColumnDefinitions="24,*,72,90,150"
+                      Margin="12,0,0,4"
+                      Visibility="Collapsed">
+                    <Button Grid.Column="1" x:Name="SentSortProductBtn" Content="Product" Tag="sent:product"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left"/>
+                    <Button Grid.Column="2" x:Name="SentSortSizeBtn" Content="Size" Tag="sent:size"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left"/>
+                    <Button Grid.Column="4" x:Name="SentSortOrderBtn" Content="Order #" Tag="sent:order"
+                            Click="SortHeader_Click" Background="Transparent" BorderThickness="0"
+                            Padding="4,2" FontSize="11" HorizontalAlignment="Left" Margin="12,0,0,0"/>
+                </Grid>
+
                 <ItemsControl ItemsSource="{x:Bind AlreadySentRows}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="local:OrderRow">
@@ -234,7 +282,7 @@
                                     Padding="12,6" Margin="0,2"
                                     Opacity="0.8"
                                     Tapped="ProcessedRow_Tapped">
-                                <Grid ColumnDefinitions="24,*,72,Auto,Auto">
+                                <Grid ColumnDefinitions="24,*,72,90,150">
                                     <TextBlock Grid.Column="0"
                                                Text="&#xE73E;"
                                                FontFamily="Segoe MDL2 Assets"

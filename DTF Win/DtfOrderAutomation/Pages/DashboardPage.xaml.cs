@@ -55,7 +55,7 @@ public sealed partial class DashboardPage : Page
 
         // Navigate to Last Run so the user sees live output
         App.Window.NavigateTo<LastRunPage>();
-        _ = App.RunAutomationAsync(dialog.From, dialog.To);
+        _ = App.RunAutomationAsync(dialog.From, dialog.To, dialog.OrderNumberFrom, dialog.OrderNumberTo);
     }
 
     private void OnRunStateChanged(bool isRunning) =>
