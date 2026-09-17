@@ -1,5 +1,5 @@
 {
-  "version": "0.0.10",
-  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.10/DTF.Setup.exe",
-  "release_notes": "Dashboard widgets now grow to fill the window width instead of staying capped at a fixed size, with a consistent 30px edge margin."
+  "version": "0.0.11",
+  "download_url": "https://github.com/ryanvanbelkum/dtf-order-automation/releases/download/v0.0.11/DTF.Setup.exe",
+  "release_notes": "Add order number range fetch option and sortable Last Run columns. Lets users fetch Shopify orders by order number range in addition to date range, and adds sortable Product/Size/Order # columns plus a cleaned-up summary strip on the Last Run page."
 }
